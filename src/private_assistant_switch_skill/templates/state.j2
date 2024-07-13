@@ -1,0 +1,7 @@
+{% if parameters.targets|length > 0 -%}
+I have turned the {% for target in parameters.targets -%}
+{{ target_alias_cache[target] }}{{" and " if not loop.last and parameters.targets|length > 1 else "" }}
+{%- endfor %} {{ action.value }}.
+{% else -%}
+Couldn't find lights requested.
+{% endif -%}
