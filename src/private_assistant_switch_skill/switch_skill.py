@@ -69,7 +69,7 @@ class SwitchSkill(commons.BaseSkill):
         return self._target_alias_cache
 
     def calculate_certainty(self, intent_analysis_result: messages.IntentAnalysisResult) -> float:
-        if ["switch"] in intent_analysis_result.verbs:
+        if "switch" in intent_analysis_result.verbs:
             return 1.0
         return 0
 

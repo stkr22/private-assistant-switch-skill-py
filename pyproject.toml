@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "private-assistant-switch-skill"
-version = "0.1.7"
+version = "0.1.8"
 description = "Home Automation Skill for Modular Private Assistant: Manages and controls smart plugs and bulbs via Home Assistant API."
 authors = ["stkr22 <stkr22@github.com>"]
 readme = "README.md"
