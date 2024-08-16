@@ -1,0 +1,12 @@
+# Changes here will be overwritten by Copier
+_commit: 0.1.3
+_src_path: gh:stkr22/copier-python-project
+author_email: stkr22@github.com
+author_full_name: stkr22
+copyright_license: GNU General Public License v3.0
+project_description: 'Home Automation Skill for Modular Private Assistant: Manages
+    and controls smart plugs and bulbs via Home Assistant API.'
+project_name: Private Assistant Switch Skill
+python_package_distribution_name: private-assistant-switch-skill
+python_package_import_name: private_assistant_switch_skill
+version: 0.1.8
