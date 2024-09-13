@@ -10,13 +10,13 @@ from private_assistant_commons.skill_logger import SkillLogger
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from private_assistant_switch_skill.models import Device  # Import the Device model from models.py
+from private_assistant_switch_skill.models import SwitchSkillDevice  # Import the Device model from models.py
 
 logger = SkillLogger.get_logger(__name__)
 
 
 class Parameters(BaseModel):
-    targets: list[Device] = []
+    targets: list[SwitchSkillDevice] = []
 
 
 class Action(Enum):
@@ -46,7 +46,7 @@ class SwitchSkill(commons.BaseSkill):
         super().__init__(config_obj, mqtt_client)
         self.db_engine = db_engine
         self.template_env = template_env
-        self._device_cache: dict[str, list[Device]] = {}  # Cache devices by room
+        self._device_cache: dict[str, list[SwitchSkillDevice]] = {}  # Cache devices by room
         self.action_to_answer: dict[Action, jinja2.Template] = {}
 
         # Preload templates
@@ -60,13 +60,13 @@ class SwitchSkill(commons.BaseSkill):
             logger.error("Failed to load template: %s", e, exc_info=True)
 
     @property
-    def device_cache(self) -> dict[str, list[Device]]:
+    def device_cache(self) -> dict[str, list[SwitchSkillDevice]]:
         """Lazy-loaded cache for devices."""
         if not self._device_cache:
             logger.debug("Loading devices into cache.")
             try:
                 with Session(self.db_engine) as session:
-                    statement = select(Device)
+                    statement = select(SwitchSkillDevice)
                     devices = session.exec(statement).all()
                     for device in devices:
                         if device.room not in self._device_cache:
@@ -76,7 +76,7 @@ class SwitchSkill(commons.BaseSkill):
                 logger.error("Error loading devices into cache: %s", e, exc_info=True)
         return self._device_cache
 
-    def get_devices(self, room: str) -> list[Device]:
+    def get_devices(self, room: str) -> list[SwitchSkillDevice]:
         """Return devices for a specific room, using cache."""
         logger.info("Fetching devices for room: %s", room)
         return self.device_cache.get(room, [])

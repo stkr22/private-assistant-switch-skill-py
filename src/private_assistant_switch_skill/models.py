@@ -1,11 +1,7 @@
 from sqlmodel import Field, SQLModel
 
 
-class BaseSwitchSkillModel(SQLModel):
-    __table_args__ = {"schema": "switch_skill"}
-
-
-class Device(BaseSwitchSkillModel, table=True):  # type: ignore
+class SwitchSkillDevice(SQLModel, table=True):  # type: ignore
     id: int | None = Field(default=None, primary_key=True)
     topic: str
     alias: str

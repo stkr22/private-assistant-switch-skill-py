@@ -1,6 +1,7 @@
 import jinja2
 import pytest
-from private_assistant_switch_skill.models import Device
+
+from private_assistant_switch_skill.models import SwitchSkillDevice
 from private_assistant_switch_skill.switch_skill import Action, Parameters  # Assuming Parameters is defined here
 
 
@@ -42,15 +43,19 @@ def test_help_template(jinja_env, expected_output):
     [
         ([], "I couldn't find any devices.\n"),
         (
-            [Device(alias="Living Room Light")],
+            [SwitchSkillDevice(alias="Living Room Light")],
             "Here are the lights available: Living Room Light\n",
         ),
         (
-            [Device(alias="Living Room Light"), Device(alias="Bedroom Fan")],
+            [SwitchSkillDevice(alias="Living Room Light"), SwitchSkillDevice(alias="Bedroom Fan")],
             "Here are the lights available: Living Room Light and Bedroom Fan\n",
         ),
         (
-            [Device(alias="Living Room Light"), Device(alias="Bedroom Fan"), Device(alias="Kitchen Light")],
+            [
+                SwitchSkillDevice(alias="Living Room Light"),
+                SwitchSkillDevice(alias="Bedroom Fan"),
+                SwitchSkillDevice(alias="Kitchen Light"),
+            ],
             "Here are the lights available: Living Room Light, Bedroom Fan and Kitchen Light\n",
         ),
     ],
@@ -65,8 +70,8 @@ def test_list_template(jinja_env, targets, expected_output):
 @pytest.mark.parametrize(
     "action, targets, expected_output",
     [
-        (Action.ON, [Device(alias="Living Room Light")], "I have turned the Living Room Light on.\n"),
-        (Action.OFF, [Device(alias="Bedroom Fan")], "I have turned the Bedroom Fan off.\n"),
+        (Action.ON, [SwitchSkillDevice(alias="Living Room Light")], "I have turned the Living Room Light on.\n"),
+        (Action.OFF, [SwitchSkillDevice(alias="Bedroom Fan")], "I have turned the Bedroom Fan off.\n"),
         (Action.ON, [], "Sorry, couldn't find lights requested.\n"),
     ],
 )
