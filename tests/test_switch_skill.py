@@ -3,9 +3,10 @@ from unittest.mock import Mock, patch
 
 import jinja2  # Import Jinja2
 from private_assistant_commons import messages
-from private_assistant_switch_skill.models import Device
+from sqlmodel import Session, SQLModel, create_engine, text
+
+from private_assistant_switch_skill import models
 from private_assistant_switch_skill.switch_skill import Action, Parameters, SwitchSkill
-from sqlmodel import Session, SQLModel, create_engine
 
 
 class TestSwitchSkill(unittest.TestCase):
@@ -13,6 +14,9 @@ class TestSwitchSkill(unittest.TestCase):
     def setUpClass(cls):
         # Set up an in-memory SQLite database
         cls.engine = create_engine("sqlite:///:memory:", echo=False)
+        # Attach a separate database file to act as the 'switch_skill' schema
+        with cls.engine.connect() as connection:
+            connection.execute(text("ATTACH DATABASE '/tmp/switch_skill.db' AS switch_skill;"))
         SQLModel.metadata.create_all(cls.engine)
 
     def setUp(self):
@@ -38,11 +42,21 @@ class TestSwitchSkill(unittest.TestCase):
 
     def test_get_devices(self):
         # Insert a mock device into the in-memory SQLite database
-        mock_device = Device(
-            topic="livingroom/light/main", alias="main light", room="livingroom", payload_on="ON", payload_off="OFF"
+        mock_device = models.Device(
+            id=1,
+            topic="livingroom/light/main",
+            alias="main light",
+            room="livingroom",
+            payload_on="ON",
+            payload_off="OFF",
         )
-        mock_device_two = Device(
-            topic="livingroom/light/shelf", alias="main shelf", room="livingroom", payload_on="ON", payload_off="OFF"
+        mock_device_two = models.Device(
+            id=2,
+            topic="livingroom/light/shelf",
+            alias="main shelf",
+            room="livingroom",
+            payload_on="ON",
+            payload_off="OFF",
         )
         with self.session as session:
             session.add(mock_device)
@@ -57,12 +71,17 @@ class TestSwitchSkill(unittest.TestCase):
         self.assertEqual(devices[0].alias, "main light")
         self.assertEqual(devices[0].topic, "livingroom/light/main")
 
+        with self.session as session:
+            session.delete(mock_device)
+            session.delete(mock_device_two)
+            session.commit()
+
     def test_find_parameters(self):
         # Insert a mock device into the in-memory SQLite database
-        mock_device = Device(
+        mock_device = models.Device(
             topic="livingroom/light/main", alias="main light", room="livingroom", payload_on="ON", payload_off="OFF"
         )
-        mock_device_two = Device(
+        mock_device_two = models.Device(
             topic="livingroom/light/shelf", alias="main shelf", room="livingroom", payload_on="ON", payload_off="OFF"
         )
 
@@ -98,7 +117,7 @@ class TestSwitchSkill(unittest.TestCase):
     @patch("private_assistant_switch_skill.switch_skill.logger")
     def test_send_mqtt_command(self, mock_logger):
         # Create mock device
-        mock_device = Device(
+        mock_device = models.Device(
             id=1,
             topic="livingroom/light/main",
             alias="main light",
@@ -118,7 +137,7 @@ class TestSwitchSkill(unittest.TestCase):
         mock_logger.info.assert_called_with("Sending payload %s to topic %s via MQTT.", "ON", "livingroom/light/main")
 
     def test_process_request_with_valid_action(self):
-        mock_device = Device(
+        mock_device = models.Device(
             id=1,
             topic="livingroom/light/main",
             alias="light",
@@ -157,7 +176,7 @@ class TestSwitchSkill(unittest.TestCase):
             )
 
     def test_get_answer(self):
-        mock_device = Device(
+        mock_device = models.Device(
             id=1,
             topic="livingroom/light/main",
             alias="light",
