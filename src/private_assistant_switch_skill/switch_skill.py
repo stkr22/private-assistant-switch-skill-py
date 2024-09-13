@@ -49,6 +49,11 @@ class SwitchSkill(commons.BaseSkill):
         self._device_cache: dict[str, list[SwitchSkillDevice]] = {}  # Cache devices by room
         self.action_to_answer: dict[Action, jinja2.Template] = {}
 
+        def on_disconnect(client, userdata, rc):
+            logger.info(f"Disconnected with result code {rc}")
+
+        self.mqtt_client.on_disconnect = on_disconnect
+
         # Preload templates
         try:
             self.action_to_answer[Action.HELP] = self.template_env.get_template("help.j2")
@@ -118,7 +123,7 @@ class SwitchSkill(commons.BaseSkill):
             payload = device.payload_on if action == Action.ON else device.payload_off
             logger.info("Sending payload %s to topic %s via MQTT.", payload, device.topic)
             try:
-                self.mqtt_client.publish(device.topic, payload)
+                self.mqtt_client.publish(device.topic, payload, qos=1)
             except Exception as e:
                 logger.error("Failed to send MQTT message to topic %s: %s", device.topic, e, exc_info=True)
 
