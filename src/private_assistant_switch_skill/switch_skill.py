@@ -1,21 +1,22 @@
 import string
 from enum import Enum
 
-import homeassistant_api as ha_api
 import jinja2
 import paho.mqtt.client as mqtt
 import private_assistant_commons as commons
+import sqlalchemy
 from private_assistant_commons import messages
 from private_assistant_commons.skill_logger import SkillLogger
 from pydantic import BaseModel
+from sqlmodel import Session, select
 
-from private_assistant_switch_skill.config import SkillConfig
+from private_assistant_switch_skill.models import Device  # Import the Device model from models.py
 
 logger = SkillLogger.get_logger(__name__)
 
 
 class Parameters(BaseModel):
-    targets: list[str] = []
+    targets: list[Device] = []
 
 
 class Action(Enum):
@@ -37,14 +38,15 @@ class Action(Enum):
 class SwitchSkill(commons.BaseSkill):
     def __init__(
         self,
-        config_obj: SkillConfig,
+        config_obj: commons.SkillConfig,
         mqtt_client: mqtt.Client,
-        ha_api_client: ha_api.Client,
+        db_engine: sqlalchemy.Engine,
         template_env: jinja2.Environment,
     ) -> None:
         super().__init__(config_obj, mqtt_client)
-        self.ha_api_client: ha_api.Client = ha_api_client
-        self.template_env: jinja2.Environment = template_env
+        self.db_engine = db_engine
+        self.template_env = template_env
+        self._device_cache: dict[str, list[Device]] = {}  # Cache devices by room
         self.action_to_answer: dict[Action, jinja2.Template] = {}
 
         # Preload templates
@@ -55,26 +57,29 @@ class SwitchSkill(commons.BaseSkill):
             self.action_to_answer[Action.LIST] = self.template_env.get_template("list.j2")
             logger.debug("Templates successfully loaded during initialization.")
         except jinja2.TemplateNotFound as e:
-            logger.error(f"Failed to load template: {e}")
-
-        self._target_cache: dict[str, ha_api.State] = {}
-        self._target_alias_cache: dict[str, str] = {}
+            logger.error("Failed to load template: %s", e, exc_info=True)
 
     @property
-    def target_cache(self) -> dict[str, ha_api.State]:
-        if len(self._target_cache) < 1:
-            logger.debug("Fetching targets from Home Assistant API.")
-            self._target_cache = self.get_targets()
-        return self._target_cache
+    def device_cache(self) -> dict[str, list[Device]]:
+        """Lazy-loaded cache for devices."""
+        if not self._device_cache:
+            logger.debug("Loading devices into cache.")
+            try:
+                with Session(self.db_engine) as session:
+                    statement = select(Device)
+                    devices = session.exec(statement).all()
+                    for device in devices:
+                        if device.room not in self._device_cache:
+                            self._device_cache[device.room] = []
+                        self._device_cache[device.room].append(device)
+            except Exception as e:
+                logger.error("Error loading devices into cache: %s", e, exc_info=True)
+        return self._device_cache
 
-    @property
-    def target_alias_cache(self) -> dict[str, str]:
-        if len(self._target_alias_cache) < 1:
-            logger.debug("Building target alias cache.")
-            for target in self.target_cache.values():
-                alias = target.attributes.get("friendly_name", "no name").lower()
-                self._target_alias_cache[target.entity_id] = alias
-        return self._target_alias_cache
+    def get_devices(self, room: str) -> list[Device]:
+        """Return devices for a specific room, using cache."""
+        logger.info("Fetching devices for room: %s", room)
+        return self.device_cache.get(room, [])
 
     def calculate_certainty(self, intent_analysis_result: messages.IntentAnalysisResult) -> float:
         if "switch" in intent_analysis_result.verbs:
@@ -83,45 +88,16 @@ class SwitchSkill(commons.BaseSkill):
         logger.debug("No switch verb detected, certainty set to 0.")
         return 0
 
-    def get_targets(self) -> dict[str, ha_api.State]:
-        entity_groups = self.ha_api_client.get_entities()
-        room_entities = {entity_name: entity.state for entity_name, entity in entity_groups["light"].entities.items()}
-        room_entities |= {
-            entity_name: entity.state
-            for entity_name, entity in entity_groups["switch"].entities.items()
-            if "plug" in entity_name.lower()
-        }
-        logger.debug(f"Retrieved {len(room_entities)} switch and light entities from Home Assistant.")
-        return room_entities
-
-    def find_parameter_targets(self, intent_analysis_result: messages.IntentAnalysisResult) -> list[str]:
-        targets = []
-        room = intent_analysis_result.client_request.room
-        if "completely" in intent_analysis_result.client_request.text.lower():
-            return [target for target in self.target_alias_cache.keys() if room in target]
-        for target, alias in self.target_alias_cache.items():
-            if alias in intent_analysis_result.nouns and room in target:
-                targets.append(target)
-        if len(targets) < 1:
-            for target, alias in self.target_alias_cache.items():
-                if alias in intent_analysis_result.nouns:
-                    targets.append(target)
-        logger.debug(f"Found {len(targets)} targets matching intent analysis.")
-        return targets
-
     def find_parameters(self, action: Action, intent_analysis_result: messages.IntentAnalysisResult) -> Parameters:
         parameters = Parameters()
+        room = intent_analysis_result.client_request.room
+        devices = self.get_devices(room)
         if action == Action.LIST:
-            parameters.targets = [
-                target
-                for target in self.target_alias_cache.keys()
-                if intent_analysis_result.client_request.room in target
-            ]
-        if action in [Action.ON, Action.OFF]:
-            found_targets = self.find_parameter_targets(intent_analysis_result=intent_analysis_result)
-            if len(found_targets) > 0:
-                parameters.targets = found_targets
-        logger.debug(f"Parameters found for action {action}: {parameters}.")
+            parameters.targets = devices
+        elif action in [Action.ON, Action.OFF]:
+            targets = [device for device in devices if device.alias in intent_analysis_result.nouns]
+            parameters.targets = targets
+        logger.debug("Parameters found for action %s: %s", action, parameters.targets)
         return parameters
 
     def get_answer(self, action: Action, parameters: Parameters) -> str:
@@ -130,43 +106,33 @@ class SwitchSkill(commons.BaseSkill):
             answer = template.render(
                 action=action,
                 parameters=parameters,
-                target_alias_cache=self.target_alias_cache,
             )
-            logger.debug(f"Generated answer using template for action {action}.")
+            logger.debug("Generated answer using template for action %s.", action)
             return answer
         else:
-            logger.error(f"No template found for action {action}.")
+            logger.error("No template found for action %s.", action)
             return "Sorry, I couldn't process your request."
 
-    def call_action_api(self, action: Action, parameters: Parameters) -> None:
-        for target in parameters.targets:
-            if "switch" in target:
-                service = self.ha_api_client.get_domain("switch")
-            else:
-                service = self.ha_api_client.get_domain("light")
-            if service is None:
-                logger.error("Service is None.")
-                continue
-            if action == Action.ON:
-                logger.debug(f"Turning on {target}.")
-                service.turn_on(entity_id=target)
-            elif action == Action.OFF:
-                logger.debug(f"Turning off {target}.")
-                service.turn_off(entity_id=target)
-            else:
-                continue
+    def send_mqtt_command(self, action: Action, parameters: Parameters) -> None:
+        for device in parameters.targets:
+            payload = device.payload_on if action == Action.ON else device.payload_off
+            logger.info("Sending payload %s to topic %s via MQTT.", payload, device.topic)
+            try:
+                self.mqtt_client.publish(device.topic, payload)
+            except Exception as e:
+                logger.error("Failed to send MQTT message to topic %s: %s", device.topic, e, exc_info=True)
 
     def process_request(self, intent_analysis_result: messages.IntentAnalysisResult) -> None:
         action = Action.find_matching_action(intent_analysis_result.client_request.text)
         if action is None:
-            logger.error(f"Unrecognized action in verbs: {intent_analysis_result.verbs}")
+            logger.error("Unrecognized action in verbs: %s", intent_analysis_result.verbs)
             return
 
-        parameters = self.find_parameters(action, intent_analysis_result=intent_analysis_result)
+        parameters = self.find_parameters(action, intent_analysis_result)
         if parameters.targets:
             answer = self.get_answer(action, parameters)
             self.add_text_to_output_topic(answer, client_request=intent_analysis_result.client_request)
             if action not in [Action.HELP, Action.LIST]:
-                self.call_action_api(action, parameters)
+                self.send_mqtt_command(action, parameters)
         else:
-            logger.error("No targets found for action.")
+            logger.error("No targets found for action %s.", action)
