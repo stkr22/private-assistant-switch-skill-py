@@ -125,7 +125,7 @@ class TestSwitchSkill(unittest.TestCase):
         self.skill.send_mqtt_command(Action.ON, parameters)
 
         # Assert that the MQTT client sent the correct payload to the correct topic
-        self.mock_mqtt_client.publish.assert_called_once_with("livingroom/light/main", "ON")
+        self.mock_mqtt_client.publish.assert_called_once_with("livingroom/light/main", "ON", qos=1)
         mock_logger.info.assert_called_with("Sending payload %s to topic %s via MQTT.", "ON", "livingroom/light/main")
 
     def test_process_request_with_valid_action(self):

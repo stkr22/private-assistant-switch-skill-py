@@ -49,8 +49,11 @@ class SwitchSkill(commons.BaseSkill):
         self._device_cache: dict[str, list[SwitchSkillDevice]] = {}  # Cache devices by room
         self.action_to_answer: dict[Action, jinja2.Template] = {}
 
-        def on_disconnect(client, userdata, rc):
-            logger.info(f"Disconnected with result code {rc}")
+        def on_disconnect(client, userdata, rc, properties=None):
+            if rc != 0:
+                logger.warning(f"Unexpected disconnection. Result code: {rc}")
+            else:
+                logger.info("Disconnected successfully.")
 
         self.mqtt_client.on_disconnect = on_disconnect
 
