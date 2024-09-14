@@ -7,7 +7,7 @@ import private_assistant_commons as commons
 import sqlalchemy
 from private_assistant_commons import messages
 from private_assistant_commons.skill_logger import SkillLogger
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlmodel import Session, select
 
 from private_assistant_switch_skill.models import SwitchSkillDevice  # Import the Device model from models.py
@@ -49,14 +49,6 @@ class SwitchSkill(commons.BaseSkill):
         self._device_cache: dict[str, list[SwitchSkillDevice]] = {}  # Cache devices by room
         self.action_to_answer: dict[Action, jinja2.Template] = {}
 
-        def on_disconnect(client, user_data, flags, rc, properties=None):
-            if rc != 0:
-                logger.warning(f"Unexpected disconnection. Result code: {rc}")
-            else:
-                logger.info("Disconnected successfully.")
-
-        self.mqtt_client.on_disconnect = on_disconnect
-
         # Preload templates
         try:
             self.action_to_answer[Action.HELP] = self.template_env.get_template("help.j2")
@@ -72,16 +64,17 @@ class SwitchSkill(commons.BaseSkill):
         """Lazy-loaded cache for devices."""
         if not self._device_cache:
             logger.debug("Loading devices into cache.")
-            try:
-                with Session(self.db_engine) as session:
-                    statement = select(SwitchSkillDevice)
-                    devices = session.exec(statement).all()
-                    for device in devices:
+            with Session(self.db_engine) as session:
+                statement = select(SwitchSkillDevice)
+                devices = session.exec(statement).all()
+                for device in devices:
+                    try:
+                        device.model_validate(device)
                         if device.room not in self._device_cache:
                             self._device_cache[device.room] = []
                         self._device_cache[device.room].append(device)
-            except Exception as e:
-                logger.error("Error loading devices into cache: %s", e, exc_info=True)
+                    except ValidationError as e:
+                        logger.error("Validation error loading device into cache: %s", e)
         return self._device_cache
 
     def get_devices(self, room: str) -> list[SwitchSkillDevice]:
