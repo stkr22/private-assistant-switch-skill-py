@@ -1,7 +1,11 @@
 {% if parameters.targets|length > 0 -%}
-I have turned the {% for target in parameters.targets -%}
-    {{ target.alias }}{% if not loop.last and loop.index != loop.length - 1 %}, {% elif loop.index == loop.length - 1 %} and {% endif %}
-{%- endfor %} {{ " ".join(action.value) }}.
+{% if parameters.targets|length == 1 -%}
+The device {{ parameters.targets[0].alias }} has been turned {{ " ".join(action.value) }}.
 {% else -%}
-Sorry, couldn't find lights requested.
+The devices {% for target in parameters.targets -%}
+    {{ target.alias }}{% if not loop.last and loop.index != loop.length - 1 %}, {% elif loop.index == loop.length - 1 %} and {% endif %}
+{%- endfor %} have been turned {{ " ".join(action.value) }}.
 {% endif -%}
+{% else -%}
+No devices matching the request were found.
+{% endif %}
