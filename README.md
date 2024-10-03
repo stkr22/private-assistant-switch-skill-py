@@ -22,7 +22,7 @@ This Home Automation Skill is a specialized module designed to integrate with a 
 ### Installation
 
 1. Clone the repository to your local machine.
-2. Ensure Python 3.11 is installed.
+2. Ensure Python 3.12 is installed.
 3. Install dependencies using:
     ```bash
     pip install -r requirements.txt
