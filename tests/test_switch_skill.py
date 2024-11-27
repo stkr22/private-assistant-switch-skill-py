@@ -144,14 +144,14 @@ class TestSwitchSkill(unittest.IsolatedAsyncioTestCase):
             patch.object(self.skill, "get_answer", return_value="Turning on the livingroom light") as mock_get_answer,
             patch.object(self.skill, "send_mqtt_command") as mock_send_mqtt_command,
             patch.object(self.skill, "find_parameters", return_value=mock_parameters),
-            patch.object(self.skill, "add_text_to_output_topic") as mock_add_text_to_output_topic,
+            patch.object(self.skill, "send_response") as mock_send_response,
         ):
             await self.skill.process_request(mock_intent_result)
 
             # Assert that methods were called with expected arguments
             mock_get_answer.assert_called_once_with(Action.ON, mock_parameters)
             mock_send_mqtt_command.assert_called_once_with(Action.ON, mock_parameters)
-            mock_add_text_to_output_topic.assert_called_once_with(
+            mock_send_response.assert_called_once_with(
                 "Turning on the livingroom light", client_request=mock_intent_result.client_request
             )
 
