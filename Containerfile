@@ -1,21 +1,31 @@
 FROM python:3.12-slim
 
-ENV PYTHONUNBUFFERED 1
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
-ARG WHEEL_FILE=my_wheel.wh
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser -s /sbin/nologin -M appuser \
+    && mkdir -p /app /app/config \
+    && chown -R appuser:appuser /app
 
-# Copy only the wheel file
+# Set working directory
+WORKDIR /app
+
+# Copy and install the wheel file
+ARG WHEEL_FILE=my_wheel.whl
 COPY dist/${WHEEL_FILE} /tmp/${WHEEL_FILE}
 
-# Install the package
-RUN pip install /tmp/${WHEEL_FILE} && \
-    rm /tmp/${WHEEL_FILE}
+# Install dependencies and clean up in one layer
+RUN pip install --no-cache-dir /tmp/${WHEEL_FILE} \
+    && rm -rf /tmp/* \
+    && rm -rf /var/cache/apt/* \
+    && rm -rf /root/.cache/*
 
-RUN groupadd -r pythonuser && useradd -r -m -g pythonuser pythonuser
-
-WORKDIR /home/pythonuser
-
-USER pythonuser
+# Switch to non-root user
+USER appuser
 
 ENV PRIVATE_ASSISTANT_CONFIG_PATH=template.yaml
 
