@@ -2,6 +2,6 @@
 No devices were found.
 {% else -%}
 The following devices are available: {% for target in parameters.targets -%}
-    {{ target.alias }}{% if not loop.last and loop.index != loop.length - 1 %}, {% elif loop.index == loop.length - 1 %} and {% endif %}
+    {{ target.device.alias }}{% if not loop.last and loop.index != loop.length - 1 %}, {% elif loop.index == loop.length - 1 %} and {% endif %}
 {%- endfor %}
 {% endif %}

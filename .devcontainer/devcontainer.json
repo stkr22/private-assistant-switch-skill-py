@@ -28,6 +28,6 @@
 	"containerEnv": {
 		"HOME": "/home/vscode"
 	},
-	"postCreateCommand": "uv sync --group dev && uvx pre-commit install"
+	"postCreateCommand": "uv sync --group dev"
 
 }

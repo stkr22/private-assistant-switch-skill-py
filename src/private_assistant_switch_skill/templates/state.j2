@@ -1,9 +1,9 @@
 {% if parameters.targets|length > 0 -%}
 {% if parameters.targets|length == 1 -%}
-The device {{ parameters.targets[0].alias }} has been turned {{ " ".join(action.value) }}.
+The device {{ parameters.targets[0].device.alias }}{% if parameters.targets[0].found_room != parameters.current_room %} (found in {{ parameters.targets[0].found_room }}){% endif %} has been turned {{ " ".join(action.value) }}.
 {% else -%}
 The devices {% for target in parameters.targets -%}
-    {{ target.alias }}{% if not loop.last and loop.index != loop.length - 1 %}, {% elif loop.index == loop.length - 1 %} and {% endif %}
+    {{ target.device.alias }}{% if target.found_room != parameters.current_room %} (found in {{ target.found_room }}){% endif %}{% if not loop.last and loop.index != loop.length - 1 %}, {% elif loop.index == loop.length - 1 %} and {% endif %}
 {%- endfor %} have been turned {{ " ".join(action.value) }}.
 {% endif -%}
 {% else -%}

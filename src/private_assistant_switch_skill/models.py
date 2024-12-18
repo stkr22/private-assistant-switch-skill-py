@@ -1,6 +1,6 @@
 import re
 
-from pydantic import ValidationInfo, field_validator
+from pydantic import field_validator
 from sqlmodel import Field, SQLModel
 from sqlmodel._compat import SQLModelConfig
 
@@ -27,7 +27,7 @@ class SwitchSkillDevice(SQLModelValidation, table=True):  # type: ignore
     # Validate the topic field to ensure it conforms to MQTT standards
     @field_validator("topic")
     @classmethod
-    def validate_topic(cls, value: str, info: ValidationInfo):
+    def validate_topic(cls, value: str):
         # Check for any invalid characters in the topic
         if MQTT_TOPIC_REGEX.findall(value):
             raise ValueError("must not contain '+', '#', whitespace, or control characters.")
