@@ -14,8 +14,14 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from private_assistant_switch_skill.models import SwitchSkillDevice  # Import the Device model from models.py
 
 
+class DeviceLocation(BaseModel):
+    device: SwitchSkillDevice
+    found_room: str
+
+
 class Parameters(BaseModel):
-    targets: list[SwitchSkillDevice] = []
+    targets: list[DeviceLocation] = []
+    current_room: str
 
 
 class Action(Enum):
@@ -77,7 +83,7 @@ class SwitchSkill(commons.BaseSkill):
                     except ValidationError as e:
                         self.logger.error("Validation error loading device into cache: %s", e)
 
-    async def get_devices(self, room: str) -> list[SwitchSkillDevice]:
+    async def get_devices_from_room(self, room: str) -> list[SwitchSkillDevice]:
         """Return devices for a specific room, using async cache."""
         if not self._device_cache:
             await self.load_device_cache()
@@ -91,15 +97,46 @@ class SwitchSkill(commons.BaseSkill):
         self.logger.debug("No switch verb detected, certainty set to 0.")
         return 0
 
+    async def find_device_in_all_rooms(self, device_name: str, current_room: str) -> DeviceLocation | None:
+        """
+        Search for a device across all rooms, prioritizing the current room.
+        """
+        if not self._device_cache:
+            await self.load_device_cache()
+
+        # First check current room
+        self.logger.debug("Searching for device '%s' in current room: %s", device_name, current_room)
+        current_room_devices = self._device_cache.get(current_room, [])
+        for device in current_room_devices:
+            if device.alias.lower() == device_name.lower():
+                return DeviceLocation(device=device, found_room=current_room)
+
+        # If not found, search other rooms
+        self.logger.debug("Device not found in current room, searching other rooms")
+        for room, devices in self._device_cache.items():
+            if room == current_room:
+                continue
+            for device in devices:
+                if device.alias.lower() == device_name.lower():
+                    return DeviceLocation(device=device, found_room=room)
+
+        return None
+
     async def find_parameters(self, action: Action, intent_analysis_result: commons.IntentAnalysisResult) -> Parameters:
-        parameters = Parameters()
         room = intent_analysis_result.client_request.room
-        devices = await self.get_devices(room)
+        parameters = Parameters(current_room=room)
+
         if action == Action.LIST:
-            parameters.targets = devices
+            devices = await self.get_devices_from_room(room)
+            parameters.targets = [DeviceLocation(device=device, found_room=room) for device in devices]
         elif action in [Action.ON, Action.OFF]:
-            targets = [device for device in devices if device.alias in intent_analysis_result.nouns]
-            parameters.targets = targets
+            device_names = [n.lower() for n in intent_analysis_result.nouns]
+
+            for device_name in device_names:
+                device_location = await self.find_device_in_all_rooms(device_name, room)
+                if device_location:
+                    parameters.targets.append(device_location)
+
         self.logger.debug("Parameters found for action %s: %s", action, parameters.targets)
         return parameters
 
@@ -112,19 +149,20 @@ class SwitchSkill(commons.BaseSkill):
             )
             self.logger.debug("Generated answer using template for action %s.", action)
             return answer
-        else:
-            self.logger.error("No template found for action %s.", action)
-            return "Sorry, I couldn't process your request."
+        self.logger.error("No template found for action %s.", action)
+        return "Sorry, I couldn't process your request."
 
     async def send_mqtt_command(self, action: Action, parameters: Parameters) -> None:
         """Send the MQTT command asynchronously."""
-        for device in parameters.targets:
-            payload = device.payload_on if action == Action.ON else device.payload_off
-            self.logger.info("Sending payload %s to topic %s via MQTT.", payload, device.topic)
-            try:
-                await self.mqtt_client.publish(device.topic, payload, qos=1)
-            except Exception as e:
-                self.logger.error("Failed to send MQTT message to topic %s: %s", device.topic, e, exc_info=True)
+        for device_location in parameters.targets:
+            payload = device_location.device.payload_on if action == Action.ON else device_location.device.payload_off
+            self.logger.info(
+                "Sending payload %s to topic %s via MQTT for device in %s.",
+                payload,
+                device_location.device.topic,
+                device_location.found_room,
+            )
+            await self.mqtt_client.publish(device_location.device.topic, payload, qos=1)
 
     async def process_request(self, intent_analysis_result: commons.IntentAnalysisResult) -> None:
         action = Action.find_matching_action(intent_analysis_result.client_request.text)
