@@ -121,3 +121,48 @@ def test_state_command(switch_skill, action, targets, current_room, expected_out
     parameters = Parameters(targets=targets, current_room=current_room)
     result = switch_skill.get_answer(action, parameters)
     assert result == expected_output
+
+
+@pytest.mark.parametrize(
+    "action, targets, rooms, expected_output",
+    [
+        # Single room, devices found
+        (
+            Action.ROOM_ON,
+            [
+                DeviceLocation(device=SwitchSkillDevice(alias="Main Light"), found_room="living room"),
+                DeviceLocation(device=SwitchSkillDevice(alias="Secondary Light"), found_room="living room"),
+            ],
+            ["living room"],
+            "Turned on all lights in living room.\n",
+        ),
+        # Multiple rooms, devices found
+        (
+            Action.ROOM_OFF,
+            [
+                DeviceLocation(device=SwitchSkillDevice(alias="Living Light"), found_room="living room"),
+                DeviceLocation(device=SwitchSkillDevice(alias="Bedroom Light"), found_room="bedroom"),
+            ],
+            ["living room", "bedroom", "kitchen"],
+            "Turned off all lights in living room, bedroom and kitchen.\n",
+        ),
+        # No devices found
+        (
+            Action.ROOM_ON,
+            [],
+            ["living room"],
+            "I couldn't find any lights in this room.\n",
+        ),
+        # No devices found in multiple rooms
+        (
+            Action.ROOM_OFF,
+            [],
+            ["living room", "bedroom"],
+            "I couldn't find any lights in these rooms.\n",
+        ),
+    ],
+)
+def test_room_state_command(switch_skill, action, targets, rooms, expected_output):
+    parameters = Parameters(targets=targets, current_room=rooms[0], rooms=rooms)
+    result = switch_skill.get_answer(action, parameters)
+    assert result == expected_output

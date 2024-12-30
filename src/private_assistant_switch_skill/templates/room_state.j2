@@ -1,0 +1,11 @@
+{% if parameters.targets -%}
+{%- set state = 'on' if "room on" == " ".join(action.value) else 'off' -%}
+{%- if parameters.rooms|length > 1 -%}
+    {%- set room_list = (parameters.rooms[:-1]|join(', ')) + ' and ' + parameters.rooms[-1] -%}
+{%- else -%}
+    {%- set room_list = parameters.rooms[0] -%}
+{%- endif -%}
+Turned {{ state }} all lights in {{ room_list }}.
+{% else -%}
+I couldn't find any lights in {% if parameters.rooms|length > 1 %}these rooms{% else %}this room{% endif %}.
+{% endif %}
