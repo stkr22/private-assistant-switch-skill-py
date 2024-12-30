@@ -1,32 +1,24 @@
 FROM python:3.12-slim
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PYTHONUNBUFFERED 1
 
-# Create non-root user
-RUN groupadd -r appuser && useradd -r -g appuser -s /sbin/nologin -M appuser \
-    && mkdir -p /app /app/config \
-    && chown -R appuser:appuser /app
+# Install uv.
+COPY --from=ghcr.io/astral-sh/uv:0.5.9 /uv /uvx /bin/
 
 # Set working directory
 WORKDIR /app
 
-# Copy and install the wheel file
-ARG WHEEL_FILE=my_wheel.whl
-COPY dist/${WHEEL_FILE} /tmp/${WHEEL_FILE}
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser -s /sbin/nologin -M appuser
 
-# Install dependencies and clean up in one layer
-RUN pip install --no-cache-dir /tmp/${WHEEL_FILE} \
-    && rm -rf /tmp/* \
-    && rm -rf /var/cache/apt/* \
-    && rm -rf /root/.cache/*
+# Copy the application into the container.
+COPY pyproject.toml README.md uv.lock /app
+COPY src /app/src
+RUN uv sync --frozen --no-cache
 
-# Switch to non-root user
+# Set the user to 'appuser'
 USER appuser
 
 ENV PRIVATE_ASSISTANT_CONFIG_PATH=template.yaml
 
-ENTRYPOINT ["private-assistant-switch-skill"]
+CMD ["/app/.venv/bin/private-assistant-switch-skill"]

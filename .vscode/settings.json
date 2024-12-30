@@ -24,5 +24,8 @@
         "pydantic",
         "spacy",
         "typer"
+    ],
+    "cSpell.files": [
+        "src"
     ]
 }

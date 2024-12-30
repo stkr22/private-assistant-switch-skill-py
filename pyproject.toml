@@ -12,6 +12,14 @@ authors = [
 readme = "README.md"
 license = { text = "GNU General Public License v3.0" }
 
+keywords = []
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Topic :: Home Automation",
+]
+
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "pydantic>=2.8.2",
@@ -19,14 +27,6 @@ dependencies = [
     "private-assistant-commons>=2.0.0",
     "sqlmodel>=0.0.22",
     "asyncpg>=0.29.0",
-]
-
-keywords = []
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Operating System :: OS Independent",
-    "Topic :: Home Automation",
 ]
 
 [dependency-groups]
