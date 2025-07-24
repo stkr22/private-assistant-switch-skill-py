@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import string
+from dataclasses import dataclass
 from enum import Enum
 
 import aiomqtt
@@ -12,6 +13,13 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from private_assistant_switch_skill.models import SwitchSkillDevice  # Import the Device model from models.py
+
+
+@dataclass
+class SwitchSkillDependencies:
+    """Container for SwitchSkill dependencies to reduce constructor parameter count."""
+    db_engine: AsyncEngine
+    template_env: jinja2.Environment
 
 
 class DeviceLocation(BaseModel):
@@ -27,12 +35,12 @@ class Parameters(BaseModel):
 
 
 class Action(Enum):
-    HELP = ["help"]
-    ON = ["on"]
-    OFF = ["off"]
-    LIST = ["list"]
-    ROOM_ON = ["room", "on"]
-    ROOM_OFF = ["room", "off"]
+    HELP = ["help"]  # noqa: RUF012
+    ON = ["on"]  # noqa: RUF012
+    OFF = ["off"]  # noqa: RUF012
+    LIST = ["list"]  # noqa: RUF012
+    ROOM_ON = ["room", "on"]  # noqa: RUF012
+    ROOM_OFF = ["room", "off"]  # noqa: RUF012
 
     @classmethod
     def find_matching_action(cls, text: str) -> "Action | None":
@@ -59,14 +67,13 @@ class SwitchSkill(commons.BaseSkill):
         self,
         config_obj: commons.SkillConfig,
         mqtt_client: aiomqtt.Client,
-        db_engine: AsyncEngine,
-        template_env: jinja2.Environment,
+        dependencies: SwitchSkillDependencies,
         task_group: asyncio.TaskGroup,
         logger: logging.Logger,
     ) -> None:
         super().__init__(config_obj=config_obj, mqtt_client=mqtt_client, task_group=task_group, logger=logger)
-        self.db_engine = db_engine
-        self.template_env = template_env
+        self.db_engine = dependencies.db_engine
+        self.template_env = dependencies.template_env
         self._device_cache: dict[str, list[SwitchSkillDevice]] = {}
         self.action_to_answer: dict[Action, jinja2.Template] = {}
 

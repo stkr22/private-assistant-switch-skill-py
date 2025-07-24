@@ -65,7 +65,7 @@ private-assistant-switch-skill = "private_assistant_switch_skill.main:app"
 
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 line-length = 120
 indent-width = 4
 
@@ -94,7 +94,7 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 

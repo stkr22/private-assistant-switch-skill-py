@@ -4,7 +4,13 @@ import jinja2
 import pytest
 
 from private_assistant_switch_skill.models import SwitchSkillDevice
-from private_assistant_switch_skill.switch_skill import Action, DeviceLocation, Parameters, SwitchSkill
+from private_assistant_switch_skill.switch_skill import (
+    Action,
+    DeviceLocation,
+    Parameters,
+    SwitchSkill,
+    SwitchSkillDependencies,
+)
 
 
 @pytest.fixture
@@ -24,12 +30,15 @@ def switch_skill():
     mock_task_group = AsyncMock()
     mock_logger = Mock()
 
-    # Create SwitchSkill instance
+    # Create dependencies and SwitchSkill instance
+    dependencies = SwitchSkillDependencies(
+        db_engine=mock_db,
+        template_env=env,
+    )
     skill = SwitchSkill(
         config_obj=mock_config,
         mqtt_client=mock_mqtt,
-        db_engine=mock_db,
-        template_env=env,
+        dependencies=dependencies,
         task_group=mock_task_group,
         logger=mock_logger,
     )
