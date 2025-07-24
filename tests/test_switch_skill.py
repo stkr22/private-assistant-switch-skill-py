@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
 from private_assistant_switch_skill import models
-from private_assistant_switch_skill.switch_skill import Action, DeviceLocation, Parameters, SwitchSkill
+from private_assistant_switch_skill.switch_skill import (
+    Action,
+    DeviceLocation,
+    Parameters,
+    SwitchSkill,
+    SwitchSkillDependencies,
+)
 
 
 class TestSwitchSkill(unittest.IsolatedAsyncioTestCase):
@@ -24,11 +30,14 @@ class TestSwitchSkill(unittest.IsolatedAsyncioTestCase):
         self.mock_task_group = AsyncMock()
         self.mock_logger = Mock(logging.Logger)
 
+        dependencies = SwitchSkillDependencies(
+            db_engine=self.engine_async,
+            template_env=self.mock_template_env,
+        )
         self.skill = SwitchSkill(
             config_obj=self.mock_config,
             mqtt_client=self.mock_mqtt_client,
-            db_engine=self.engine_async,
-            template_env=self.mock_template_env,
+            dependencies=dependencies,
             task_group=self.mock_task_group,
             logger=self.mock_logger,
         )
