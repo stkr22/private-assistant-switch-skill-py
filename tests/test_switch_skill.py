@@ -170,15 +170,15 @@ class TestSwitchSkill(unittest.IsolatedAsyncioTestCase):
             patch.object(self.skill, "get_answer", return_value="Turning on the livingroom light") as mock_get_answer,
             patch.object(self.skill, "send_mqtt_command") as mock_send_mqtt_command,
             patch.object(self.skill, "find_parameters", return_value=mock_parameters),
-            patch.object(self.skill, "send_response") as mock_send_response,
+            patch.object(self.skill, "add_task") as mock_add_task,
         ):
             await self.skill.process_request(mock_intent_result)
 
             mock_get_answer.assert_called_once_with(Action.ON, mock_parameters)
             mock_send_mqtt_command.assert_called_once_with(Action.ON, mock_parameters)
-            mock_send_response.assert_called_once_with(
-                "Turning on the livingroom light", client_request=mock_intent_result.client_request
-            )
+            # Verify add_task was called twice: once for send_response, once for send_mqtt_command
+            check_value = 2
+            assert mock_add_task.call_count == check_value
 
     async def test_find_matching_action_room_control(self):
         # Test room-wide light control
