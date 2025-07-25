@@ -11,6 +11,10 @@
 
 **Golden rule**: When unsure about implementation details or requirements, ALWAYS consult the developer rather than making assumptions.
 
+This is a **Home Automation Skill** for a **Modular Private Assistant** system that controls smart plugs and bulbs via **zigbee2mqtt** through MQTT messaging. It's part of a distributed microservice architecture where each skill runs independently in its own container.
+
+**Architecture**: Distributed skills listen to MQTT intent analysis results and respond based on certainty scores. Communication flow: Voice → Text → Intent Analysis → MQTT broadcast → Skills respond. The skill communicates directly with zigbee2mqtt (not Home Assistant) and uses PostgreSQL to store device configurations.
+
 ---
 
 ## 1. Non-negotiable golden rules
@@ -27,6 +31,20 @@
 ---
 
 ## Critical Architecture Decisions
+
+### Core Components
+- **SwitchSkill**: Main skill class extending `private_assistant_commons.BaseSkill`
+- **SwitchSkillDevice**: SQLModel for device data (topic, alias, room, on/off payloads)
+- **Device Cache**: In-memory cache for fast device lookups, loads on first access
+- **MQTT Communication**: Fire-and-forget device control via zigbee2mqtt topics
+
+### Key Design Patterns
+- **Dependency Injection**: `SwitchSkillDependencies` container reduces constructor complexity
+- **Template-based Responses**: Jinja2 templates for natural language generation
+- **Room-aware Device Resolution**: Prioritizes current room, falls back to global search
+
+### Database Schema
+- No migration strategy (waiting for SQLModel roadmap)
 
 ---
 
@@ -61,11 +79,16 @@
 
 ## Project Structure
 
-- `src/{{ python_package_distribution_name }}/`: Main package source
+- `src/private_assistant_switch_skill/`: Main package source
+  - `main.py`: Entry point and CLI setup
+  - `switch_skill.py`: Core SwitchSkill class and business logic
+  - `models.py`: SQLModel database models (SwitchSkillDevice)
+  - `templates/`: Jinja2 response templates (help.j2, state.j2, list.j2, room_state.j2)
 - `tests/`: Test files (mirrors src structure)
 - `docs/`: Documentation source
 - `.github/workflows/`: CI/CD workflows
 - `pyproject.toml`: Project configuration and dependencies
+- `local_config.yaml`: Local MQTT configuration for development
 
 ## Environment Setup
 
