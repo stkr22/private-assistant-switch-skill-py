@@ -20,9 +20,18 @@ def main(config_path: Annotated[pathlib.Path, typer.Argument(envvar="PRIVATE_ASS
 
 async def start_skill(
     config_path: pathlib.Path,
-):
+) -> None:
+    """Initialize and start the switch skill with all dependencies.
+    
+    Sets up database, templates, logging, and MQTT connection, then starts
+    the skill's main event loop to process incoming requests.
+    
+    Args:
+        config_path: Path to YAML configuration file
+    """
     logger = skill_logger.SkillLogger.get_logger("Private Assistant SwitchSkill")
     config_obj = skill_config.load_config(config_path, skill_config.SkillConfig)
+    # AIDEV-NOTE: Database schema creation on startup - no migration system yet
     db_engine_async = create_async_engine(skill_config.PostgresConfig.from_env().connection_string_async)
     async with db_engine_async.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)

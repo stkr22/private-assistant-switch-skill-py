@@ -17,17 +17,45 @@ from private_assistant_switch_skill.models import SwitchSkillDevice  # Import th
 
 @dataclass
 class SwitchSkillDependencies:
-    """Container for SwitchSkill dependencies to reduce constructor parameter count."""
+    """Container for SwitchSkill dependencies to reduce constructor parameter count.
+    
+    Groups related dependencies into a single object to simplify dependency injection
+    and reduce the number of constructor parameters in SwitchSkill.
+    
+    Attributes:
+        db_engine: Async SQLAlchemy engine for database operations
+        template_env: Jinja2 environment for response template rendering
+    """
     db_engine: AsyncEngine
     template_env: jinja2.Environment
 
 
 class DeviceLocation(BaseModel):
+    """Represents a device and the room where it was found during device resolution.
+    
+    Used to track context when devices are found in rooms different from the current room,
+    enabling informative responses like "bedroom light (found in bedroom)".
+    
+    Attributes:
+        device: The SwitchSkillDevice that was found
+        found_room: The room where the device was located
+    """
     device: SwitchSkillDevice
     found_room: str
 
 
 class Parameters(BaseModel):
+    """Command parameters extracted from intent analysis results.
+    
+    Contains all information needed to execute a switch command, including
+    target devices, room context, and command scope.
+    
+    Attributes:
+        targets: List of devices to control with their locations
+        current_room: Room where the user made the request
+        rooms: List of rooms to search for devices
+        is_room_wide: Whether command affects all devices in room(s)
+    """
     targets: list[DeviceLocation] = []
     current_room: str
     rooms: list[str] = []
@@ -35,6 +63,19 @@ class Parameters(BaseModel):
 
 
 class Action(Enum):
+    """Enum representing different switch actions that can be performed.
+    
+    Each action is defined by a list of keywords that must all be present
+    in the user's command for the action to be detected.
+    
+    Attributes:
+        HELP: Show usage instructions
+        ON: Turn individual device(s) on  
+        OFF: Turn individual device(s) off
+        LIST: List available devices
+        ROOM_ON: Turn all devices in room(s) on
+        ROOM_OFF: Turn all devices in room(s) off
+    """
     HELP = ["help"]  # noqa: RUF012
     ON = ["on"]  # noqa: RUF012
     OFF = ["off"]  # noqa: RUF012
@@ -44,10 +85,21 @@ class Action(Enum):
 
     @classmethod
     def find_matching_action(cls, text: str) -> "Action | None":
+        """Parse user text to identify the intended action.
+        
+        Uses keyword matching to determine which action the user wants to perform.
+        Special handling for "all lights" phrases which map to room-wide actions.
+        
+        Args:
+            text: Raw user input text to parse
+            
+        Returns:
+            Action: The detected action, or None if no match found
+        """
         text = text.translate(str.maketrans("", "", string.punctuation))
         text_words = set(text.lower().split())
 
-        # Check for room-wide light control phrases
+        # AIDEV-NOTE: Special case for "all lights" - maps to room-wide control
         text_lower = text.lower()
         if "all lights" in text_lower:
             if "on" in text_words:
@@ -55,7 +107,7 @@ class Action(Enum):
             if "off" in text_words:
                 return cls.ROOM_OFF
 
-        # Check other actions
+        # Check other actions by keyword matching
         for action in cls:
             if all(word in text_words for word in action.value):
                 return action
@@ -63,6 +115,19 @@ class Action(Enum):
 
 
 class SwitchSkill(commons.BaseSkill):
+    """Main skill class for controlling smart switches, plugs, and bulbs via zigbee2mqtt.
+    
+    Processes voice commands to control IoT devices through MQTT messaging.
+    Provides room-aware device resolution, template-based responses, and device caching
+    for optimal performance.
+    
+    Attributes:
+        db_engine: Database engine for device queries
+        template_env: Jinja2 environment for response generation
+        _device_cache: In-memory cache of devices by room
+        action_to_answer: Mapping of actions to response templates
+    """
+    
     def __init__(
         self,
         config_obj: commons.SkillConfig,
@@ -71,13 +136,23 @@ class SwitchSkill(commons.BaseSkill):
         task_group: asyncio.TaskGroup,
         logger: logging.Logger,
     ) -> None:
+        """Initialize the switch skill with dependencies and load templates.
+        
+        Args:
+            config_obj: Skill configuration from commons
+            mqtt_client: MQTT client for device communication
+            dependencies: Injected dependencies (database, templates)
+            task_group: Async task group for concurrent operations
+            logger: Logger instance for debugging and monitoring
+        """
         super().__init__(config_obj=config_obj, mqtt_client=mqtt_client, task_group=task_group, logger=logger)
         self.db_engine = dependencies.db_engine
         self.template_env = dependencies.template_env
+        # AIDEV-NOTE: Device cache is lazy-loaded and never refreshed - restart required for new devices
         self._device_cache: dict[str, list[SwitchSkillDevice]] = {}
         self.action_to_answer: dict[Action, jinja2.Template] = {}
 
-        # Preload templates
+        # AIDEV-NOTE: Template preloading at init prevents runtime template lookup failures
         try:
             self.action_to_answer[Action.HELP] = self.template_env.get_template("help.j2")
             self.action_to_answer[Action.ON] = self.template_env.get_template("state.j2")
@@ -90,7 +165,15 @@ class SwitchSkill(commons.BaseSkill):
             self.logger.error("Failed to load template: %s", e, exc_info=True)
 
     async def load_device_cache(self) -> None:
-        """Asynchronously load devices into the cache."""
+        """Load all devices from database into memory cache organized by room.
+        
+        Performs lazy loading - only loads when cache is empty. Validates each device
+        and organizes them by room for efficient lookup. Invalid devices are logged
+        but do not prevent other devices from loading.
+        
+        Raises:
+            DatabaseError: If database query fails
+        """
         if not self._device_cache:
             self.logger.debug("Loading devices into cache asynchronously.")
             async with AsyncSession(self.db_engine) as session:
@@ -107,7 +190,17 @@ class SwitchSkill(commons.BaseSkill):
                         self.logger.error("Validation error loading device into cache: %s", e)
 
     async def get_devices(self, rooms: list[str]) -> list[SwitchSkillDevice]:
-        """Return devices for a list of rooms, using async cache loading."""
+        """Get all devices from the specified rooms.
+        
+        Loads device cache if needed, then returns all devices found in the
+        specified rooms. Non-existent rooms are silently ignored.
+        
+        Args:
+            rooms: List of room names to search for devices
+            
+        Returns:
+            list[SwitchSkillDevice]: All devices found in the specified rooms
+        """
         if not self._device_cache:
             await self.load_device_cache()
         self.logger.info("Fetching devices for rooms: %s", rooms)
@@ -118,7 +211,17 @@ class SwitchSkill(commons.BaseSkill):
         return devices
 
     async def get_all_room_devices(self, rooms: list[str]) -> list[DeviceLocation]:
-        """Get all devices from specified rooms."""
+        """Get all devices from specified rooms with location context.
+        
+        Similar to get_devices() but wraps each device in a DeviceLocation
+        to track which room it was found in.
+        
+        Args:
+            rooms: List of room names to search for devices
+            
+        Returns:
+            list[DeviceLocation]: All devices with their room locations
+        """
         if not self._device_cache:
             await self.load_device_cache()
 
@@ -132,6 +235,17 @@ class SwitchSkill(commons.BaseSkill):
         return await super().skill_preparations()
 
     async def calculate_certainty(self, intent_analysis_result: commons.IntentAnalysisResult) -> float:
+        """Calculate how confident this skill is about handling the user's request.
+        
+        Simple binary certainty calculation: returns 1.0 if "switch" verb is detected,
+        0.0 otherwise. This ensures the skill only processes switch-related commands.
+        
+        Args:
+            intent_analysis_result: Analyzed user intent from the intent engine
+            
+        Returns:
+            float: Certainty score (0.0 or 1.0)
+        """
         if "switch" in intent_analysis_result.verbs:
             self.logger.debug("Switch verb detected, certainty set to 1.0.")
             return 1.0
@@ -139,13 +253,23 @@ class SwitchSkill(commons.BaseSkill):
         return 0
 
     async def find_device_in_all_rooms(self, device_name: str, current_room: str) -> DeviceLocation | None:
-        """
-        Search for a device across all rooms, prioritizing the current room.
+        """Search for a device across all rooms, prioritizing the current room.
+        
+        Implements room-aware device resolution by first checking the current room,
+        then expanding the search to all other rooms. This allows users to control
+        devices in other rooms by name when not ambiguous.
+        
+        Args:
+            device_name: Name/alias of the device to find
+            current_room: Room where the user made the request
+            
+        Returns:
+            DeviceLocation: Device and its location if found, None otherwise
         """
         if not self._device_cache:
             await self.load_device_cache()
 
-        # First check current room
+        # AIDEV-NOTE: Room priority logic - current room first for context-aware resolution
         self.logger.debug("Searching for device '%s' in current room: %s", device_name, current_room)
         current_room_devices = self._device_cache.get(current_room, [])
         for device in current_room_devices:
@@ -164,10 +288,20 @@ class SwitchSkill(commons.BaseSkill):
         return None
 
     async def find_parameters(self, action: Action, intent_analysis_result: commons.IntentAnalysisResult) -> Parameters:
+        """Extract command parameters based on action type and intent analysis.
+        
+        Args:
+            action: The detected action to perform
+            intent_analysis_result: Analyzed user intent from the intent engine
+            
+        Returns:
+            Parameters: Command parameters with target devices and context
+        """
         room = intent_analysis_result.client_request.room
         parameters = Parameters(current_room=room, is_room_wide=False)
         parameters.rooms = intent_analysis_result.rooms or [intent_analysis_result.client_request.room]
 
+        # AIDEV-NOTE: Parameter extraction logic varies by action type
         if action in [Action.ROOM_ON, Action.ROOM_OFF]:
             parameters.is_room_wide = True
             parameters.targets = await self.get_all_room_devices(parameters.rooms)
@@ -197,7 +331,16 @@ class SwitchSkill(commons.BaseSkill):
         return "Sorry, I couldn't process your request."
 
     async def send_mqtt_command(self, action: Action, parameters: Parameters) -> None:
-        """Send the MQTT command asynchronously."""
+        """Send MQTT commands to control target devices.
+        
+        Publishes device-specific payloads to zigbee2mqtt topics for each target device.
+        Uses fire-and-forget approach with QoS 1 for delivery assurance but no
+        state confirmation.
+        
+        Args:
+            action: The action being performed (ON/OFF/ROOM_ON/ROOM_OFF)
+            parameters: Command parameters containing target devices
+        """
         for device_location in parameters.targets:
             is_on_action = action in [Action.ON, Action.ROOM_ON]
             payload = device_location.device.payload_on if is_on_action else device_location.device.payload_off
@@ -207,9 +350,22 @@ class SwitchSkill(commons.BaseSkill):
                 device_location.device.topic,
                 device_location.found_room,
             )
+            # AIDEV-NOTE: Fire-and-forget MQTT - no state confirmation or retry logic
             await self.mqtt_client.publish(device_location.device.topic, payload, qos=1)
 
     async def process_request(self, intent_analysis_result: commons.IntentAnalysisResult) -> None:
+        """Main request processing method - handles complete switch command workflow.
+        
+        Orchestrates the full command processing pipeline:
+        1. Parse action from user text
+        2. Find target devices based on action type
+        3. Generate response using templates
+        4. Send MQTT commands (for control actions)
+        5. Send response back to user
+        
+        Args:
+            intent_analysis_result: Analyzed user intent from the intent engine
+        """
         action = Action.find_matching_action(intent_analysis_result.client_request.text)
         if action is None:
             self.logger.error("Unrecognized action in verbs: %s", intent_analysis_result.verbs)
@@ -219,6 +375,7 @@ class SwitchSkill(commons.BaseSkill):
         if parameters.targets:
             answer = self.get_answer(action, parameters)
             self.add_task(self.send_response(answer, client_request=intent_analysis_result.client_request))
+            # AIDEV-NOTE: Only send MQTT commands for control actions, not info actions
             if action not in [Action.HELP, Action.LIST]:
                 self.add_task(self.send_mqtt_command(action, parameters))
         else:
