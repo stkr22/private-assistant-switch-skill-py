@@ -28,6 +28,7 @@ dependencies = [
     "sqlmodel~=0.0.22",
     "asyncpg~=0.30.0",
     "typer~=0.15.1",
+    "rich~=13.9.4",
 ]
 
 
