@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.4.0...v1.4.1) (2025-07-26)
+
+
+### Bug Fixes
+
+* :bug: resolve dependency injection in main.py [AI] ([3e53d24](https://github.com/stkr22/private-assistant-switch-skill-py/commit/3e53d2441573121db37fa28ebb25daa7f7e43f19))
+
 ## [1.4.0](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.3.0...v1.4.0) (2025-07-26)
 
 
