@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
 
 from private_assistant_switch_skill import switch_skill
+from private_assistant_switch_skill.switch_skill import SwitchSkillDependencies
 
 app = typer.Typer()
 
@@ -41,8 +42,14 @@ async def start_skill(
             "templates",
         )
     )
+    # Create dependencies container for dependency injection
+    dependencies = SwitchSkillDependencies(
+        db_engine=db_engine_async,
+        template_env=template_env
+    )
+    
     await mqtt_connection_handler.mqtt_connection_handler(
-        switch_skill.SwitchSkill, config_obj, 5, logger=logger, template_env=template_env, db_engine=db_engine_async
+        switch_skill.SwitchSkill, config_obj, 5, logger=logger, dependencies=dependencies
     )
 
 
