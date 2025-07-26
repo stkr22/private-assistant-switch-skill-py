@@ -12,7 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from private_assistant_switch_skill.exceptions import TemplateError, DatabaseError, DeviceCacheError
+from private_assistant_switch_skill.exceptions import (
+    TemplateError, 
+    DatabaseError, 
+    DeviceCacheError,
+    MQTTError,
+    ConcurrencyError,
+)
 from private_assistant_switch_skill.models import SwitchSkillDevice  # Import the Device model from models.py
 
 
@@ -404,27 +410,68 @@ class SwitchSkill(commons.BaseSkill):
         return "Sorry, I couldn't process your request."
 
     async def send_mqtt_command(self, action: Action, parameters: Parameters) -> None:
-        """Send MQTT commands to control target devices.
+        """Send MQTT commands to control target devices concurrently.
         
         Publishes device-specific payloads to zigbee2mqtt topics for each target device.
-        Uses fire-and-forget approach with QoS 1 for delivery assurance but no
-        state confirmation.
+        Uses concurrent operations to reduce latency for multi-device commands.
+        Fire-and-forget approach with QoS 1 for delivery assurance but no state confirmation.
         
         Args:
             action: The action being performed (ON/OFF/ROOM_ON/ROOM_OFF)
             parameters: Command parameters containing target devices
+            
+        Raises:
+            MQTTError: If MQTT publishing fails for any device
+            ConcurrencyError: If concurrent operations fail
         """
-        for device_location in parameters.targets:
-            is_on_action = action in [Action.ON, Action.ROOM_ON]
-            payload = device_location.device.payload_on if is_on_action else device_location.device.payload_off
-            self.logger.info(
-                "Sending payload %s to topic %s via MQTT for device in %s.",
-                payload,
-                device_location.device.topic,
-                device_location.found_room,
+        if not parameters.targets:
+            return
+            
+        # AIDEV-NOTE: Concurrent MQTT publishing addresses issue #49 - faster room-wide commands
+        async def publish_single_device(device_location: DeviceLocation) -> None:
+            """Publish MQTT command for a single device with error handling."""
+            try:
+                is_on_action = action in [Action.ON, Action.ROOM_ON]
+                payload = device_location.device.payload_on if is_on_action else device_location.device.payload_off
+                
+                self.logger.info(
+                    "Sending payload %s to topic %s via MQTT for device in %s.",
+                    payload,
+                    device_location.device.topic,
+                    device_location.found_room,
+                )
+                
+                await self.mqtt_client.publish(device_location.device.topic, payload, qos=1)
+                
+            except Exception as e:
+                self.logger.error(
+                    "Failed to publish MQTT command for device %s (topic: %s): %s",
+                    device_location.device.alias,
+                    device_location.device.topic,
+                    e
+                )
+                raise MQTTError(
+                    f"Failed to publish to {device_location.device.alias}",
+                    topic=device_location.device.topic
+                ) from e
+        
+        try:
+            # Execute all MQTT publishes concurrently
+            await asyncio.gather(*[
+                publish_single_device(device_location) 
+                for device_location in parameters.targets
+            ])
+            
+            self.logger.debug(
+                "Successfully sent MQTT commands to %d devices concurrently",
+                len(parameters.targets)
             )
-            # AIDEV-NOTE: Fire-and-forget MQTT - no state confirmation or retry logic
-            await self.mqtt_client.publish(device_location.device.topic, payload, qos=1)
+            
+        except Exception as e:
+            if isinstance(e, MQTTError):
+                raise
+            self.logger.error("Concurrent MQTT operations failed: %s", e)
+            raise ConcurrencyError(f"Failed to execute concurrent MQTT operations: {e}") from e
 
     async def process_request(self, intent_analysis_result: commons.IntentAnalysisResult) -> None:
         """Main request processing method - handles complete switch command workflow.
