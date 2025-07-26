@@ -5,13 +5,19 @@ from typing import Annotated
 import jinja2
 import typer
 from private_assistant_commons import mqtt_connection_handler, skill_config, skill_logger
+from rich.console import Console
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
 
 from private_assistant_switch_skill import switch_skill
 from private_assistant_switch_skill.switch_skill import SwitchSkillDependencies
 
-app = typer.Typer()
+# AIDEV-NOTE: Rich console integration provides consistent styling with private-commons logging
+console = Console()
+app = typer.Typer(
+    rich_markup_mode="rich",
+    help="[bold blue]Private Assistant Switch Skill[/bold blue] - Control smart switches, plugs, and bulbs",
+)
 
 
 @app.command()
