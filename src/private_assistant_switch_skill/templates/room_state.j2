@@ -1,5 +1,5 @@
 {% if parameters.targets -%}
-{%- set state = 'on' if "room on" == " ".join(action.value) else 'off' -%}
+{%- set state = action.get_action_name() -%}
 {%- if parameters.rooms|length > 1 -%}
     {%- set room_list = (parameters.rooms[:-1]|join(', ')) + ' and ' + parameters.rooms[-1] -%}
 {%- else -%}
