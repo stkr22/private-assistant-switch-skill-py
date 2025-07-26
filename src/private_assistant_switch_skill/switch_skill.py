@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from private_assistant_switch_skill.exceptions import TemplateError
 from private_assistant_switch_skill.models import SwitchSkillDevice  # Import the Device model from models.py
 
 
@@ -153,16 +154,38 @@ class SwitchSkill(commons.BaseSkill):
         self.action_to_answer: dict[Action, jinja2.Template] = {}
 
         # AIDEV-NOTE: Template preloading at init prevents runtime template lookup failures
-        try:
-            self.action_to_answer[Action.HELP] = self.template_env.get_template("help.j2")
-            self.action_to_answer[Action.ON] = self.template_env.get_template("state.j2")
-            self.action_to_answer[Action.OFF] = self.template_env.get_template("state.j2")
-            self.action_to_answer[Action.LIST] = self.template_env.get_template("list.j2")
-            self.action_to_answer[Action.ROOM_ON] = self.template_env.get_template("room_state.j2")
-            self.action_to_answer[Action.ROOM_OFF] = self.template_env.get_template("room_state.j2")
-            self.logger.debug("Templates successfully loaded during initialization.")
-        except jinja2.TemplateNotFound as e:
-            self.logger.error("Failed to load template: %s", e, exc_info=True)
+        self._load_templates()
+
+    def _load_templates(self) -> None:
+        """Load and validate all required templates with fallback handling.
+        
+        Raises:
+            TemplateError: If critical templates cannot be loaded
+        """
+        template_mappings = {
+            Action.HELP: "help.j2",
+            Action.ON: "state.j2", 
+            Action.OFF: "state.j2",
+            Action.LIST: "list.j2",
+            Action.ROOM_ON: "room_state.j2",
+            Action.ROOM_OFF: "room_state.j2",
+        }
+        
+        failed_templates = []
+        for action, template_name in template_mappings.items():
+            try:
+                self.action_to_answer[action] = self.template_env.get_template(template_name)
+            except jinja2.TemplateNotFound as e:
+                self.logger.error("Failed to load template %s: %s", template_name, e)
+                failed_templates.append(template_name)
+        
+        if failed_templates:
+            raise TemplateError(
+                f"Critical templates failed to load: {', '.join(failed_templates)}",
+                template_name=failed_templates[0]
+            )
+        
+        self.logger.debug("All templates successfully loaded during initialization.")
 
     async def load_device_cache(self) -> None:
         """Load all devices from database into memory cache organized by room.
