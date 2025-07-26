@@ -76,6 +76,7 @@ class Action(Enum):
         LIST: List available devices
         ROOM_ON: Turn all devices in room(s) on
         ROOM_OFF: Turn all devices in room(s) off
+        REFRESH: Refresh device cache from database
     """
     HELP = ["help"]  # noqa: RUF012
     ON = ["on"]  # noqa: RUF012
@@ -83,6 +84,7 @@ class Action(Enum):
     LIST = ["list"]  # noqa: RUF012
     ROOM_ON = ["room", "on"]  # noqa: RUF012
     ROOM_OFF = ["room", "off"]  # noqa: RUF012
+    REFRESH = ["refresh"]  # noqa: RUF012
 
     @classmethod
     def find_matching_action(cls, text: str) -> "Action | None":
@@ -169,6 +171,7 @@ class SwitchSkill(commons.BaseSkill):
             Action.LIST: "list.j2",
             Action.ROOM_ON: "room_state.j2",
             Action.ROOM_OFF: "room_state.j2",
+            Action.REFRESH: "state.j2",
         }
         
         failed_templates = []
@@ -239,6 +242,22 @@ class SwitchSkill(commons.BaseSkill):
             finally:
                 if session:
                     await session.close()
+
+    async def refresh_device_cache(self) -> None:
+        """Force refresh of device cache from database.
+        
+        Clears existing cache and reloads all devices from the database.
+        Useful for picking up newly added devices without restart.
+        
+        Raises:
+            DatabaseError: If database query fails
+            DeviceCacheError: If cache loading fails due to validation issues
+        """
+        # AIDEV-NOTE: Manual cache refresh addresses issue #43 - no more restart required for new devices
+        self.logger.info("Refreshing device cache from database...")
+        self._device_cache.clear()
+        await self.load_device_cache()
+        self.logger.info("Device cache refresh completed successfully.")
 
     async def get_devices(self, rooms: list[str]) -> list[SwitchSkillDevice]:
         """Get all devices from the specified rooms.
@@ -359,6 +378,9 @@ class SwitchSkill(commons.BaseSkill):
         elif action == Action.LIST:
             devices = await self.get_devices(parameters.rooms)
             parameters.targets = [DeviceLocation(device=device, found_room=room) for device in devices]
+        elif action == Action.REFRESH:
+            # No targets needed for refresh action
+            pass
         elif action in [Action.ON, Action.OFF]:
             device_names = [n.lower() for n in intent_analysis_result.nouns]
             for device_name in device_names:
@@ -423,6 +445,19 @@ class SwitchSkill(commons.BaseSkill):
             return
 
         parameters = await self.find_parameters(action, intent_analysis_result)
+        
+        # Handle refresh action specially
+        if action == Action.REFRESH:
+            try:
+                await self.refresh_device_cache()
+                answer = self.get_answer(action, parameters) or "Device cache refreshed successfully."
+                self.add_task(self.send_response(answer, client_request=intent_analysis_result.client_request))
+            except (DatabaseError, DeviceCacheError) as e:
+                self.logger.error("Failed to refresh device cache: %s", e)
+                error_answer = "Sorry, I couldn't refresh the device cache. Please try again later."
+                self.add_task(self.send_response(error_answer, client_request=intent_analysis_result.client_request))
+            return
+        
         if parameters.targets:
             answer = self.get_answer(action, parameters)
             self.add_task(self.send_response(answer, client_request=intent_analysis_result.client_request))
