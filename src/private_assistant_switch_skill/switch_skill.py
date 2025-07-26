@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from private_assistant_switch_skill.exceptions import TemplateError
+from private_assistant_switch_skill.exceptions import TemplateError, DatabaseError, DeviceCacheError
 from private_assistant_switch_skill.models import SwitchSkillDevice  # Import the Device model from models.py
 
 
@@ -196,13 +196,20 @@ class SwitchSkill(commons.BaseSkill):
         
         Raises:
             DatabaseError: If database query fails
+            DeviceCacheError: If cache loading fails due to validation issues
         """
         if not self._device_cache:
             self.logger.debug("Loading devices into cache asynchronously.")
-            async with AsyncSession(self.db_engine) as session:
+            
+            # AIDEV-NOTE: Improved resource management with explicit error handling and cleanup
+            session = None
+            try:
+                session = AsyncSession(self.db_engine)
                 statement = select(SwitchSkillDevice)
                 result = await session.exec(statement)
                 devices = result.all()
+                
+                validation_errors = []
                 for device in devices:
                     try:
                         device.model_validate(device)
@@ -210,7 +217,28 @@ class SwitchSkill(commons.BaseSkill):
                             self._device_cache[device.room] = []
                         self._device_cache[device.room].append(device)
                     except ValidationError as e:
-                        self.logger.error("Validation error loading device into cache: %s", e)
+                        error_msg = f"Device {device.alias} (topic: {device.topic}): {e}"
+                        self.logger.error("Validation error loading device into cache: %s", error_msg)
+                        validation_errors.append(error_msg)
+                
+                self.logger.info(
+                    "Device cache loaded successfully: %d devices across %d rooms. %d validation errors.",
+                    sum(len(devices) for devices in self._device_cache.values()),
+                    len(self._device_cache),
+                    len(validation_errors)
+                )
+                
+                if validation_errors and len(validation_errors) == len(devices):
+                    raise DeviceCacheError("All devices failed validation - no devices available")
+                    
+            except Exception as e:
+                if isinstance(e, ValidationError | DeviceCacheError):
+                    raise
+                self.logger.error("Database error loading device cache: %s", e, exc_info=True)
+                raise DatabaseError(f"Failed to load device cache from database: {e}") from e
+            finally:
+                if session:
+                    await session.close()
 
     async def get_devices(self, rooms: list[str]) -> list[SwitchSkillDevice]:
         """Get all devices from the specified rooms.

@@ -139,7 +139,7 @@ async def render_feed(...):
 
 ---
 
-## 6. Commit discipline
+## 6. Commit discipline - ALL AI AGENTS MUST FOLLOW THIS
 
 - **Granular commits**: One logical change per commit.
 - **Tag AI-generated commits**: e.g., `feat: optimise feed query [AI]`.
