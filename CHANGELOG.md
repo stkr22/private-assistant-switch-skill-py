@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.3.0...v1.4.0) (2025-07-26)
+
+
+### Features
+
+* :safety_vest: strengthen type safety and validation [AI] ([fbc8020](https://github.com/stkr22/private-assistant-switch-skill-py/commit/fbc802005698c2e1159dea44309169a98208efb6))
+
 ## [1.3.0](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.2.1...v1.3.0) (2025-07-26)
 
 
