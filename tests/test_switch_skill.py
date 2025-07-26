@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
@@ -41,6 +42,9 @@ class TestSwitchSkill(unittest.IsolatedAsyncioTestCase):
             task_group=self.mock_task_group,
             logger=self.mock_logger,
         )
+        
+        # Mock add_task to return actual asyncio.Task objects for proper concurrent testing
+        self.skill.add_task = lambda coro, name=None, **_: asyncio.create_task(coro, name=name)
         async with self.engine_async.begin() as conn:
             await conn.run_sync(SQLModel.metadata.create_all)
 
