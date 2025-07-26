@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.4.1...v1.5.0) (2025-07-26)
+
+
+### Features
+
+* :art: integrate Rich with Typer for consistent CLI styling [AI] ([cd2bf3d](https://github.com/stkr22/private-assistant-switch-skill-py/commit/cd2bf3de0f6ec6f3307a4f6372513cfb809e0e8f))
+* integrate Rich with Typer for consistent CLI styling ([58a2f97](https://github.com/stkr22/private-assistant-switch-skill-py/commit/58a2f972b90116aafc96ffbb8afd677b79a05b5f))
+
 ## [1.4.1](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.4.0...v1.4.1) (2025-07-26)
 
 
