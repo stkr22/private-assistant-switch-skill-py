@@ -22,10 +22,10 @@ async def start_skill(
     config_path: pathlib.Path,
 ) -> None:
     """Initialize and start the switch skill with all dependencies.
-    
+
     Sets up database, templates, logging, and MQTT connection, then starts
     the skill's main event loop to process incoming requests.
-    
+
     Args:
         config_path: Path to YAML configuration file
     """
