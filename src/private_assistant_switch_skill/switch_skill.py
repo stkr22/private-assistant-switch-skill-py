@@ -181,7 +181,7 @@ class SwitchSkill(commons.BaseSkill):
             Action.LIST: "list.j2",
             Action.ROOM_ON: "room_state.j2",
             Action.ROOM_OFF: "room_state.j2",
-            Action.REFRESH: "state.j2",
+            Action.REFRESH: "refresh.j2",
         }
 
         failed_templates = []
