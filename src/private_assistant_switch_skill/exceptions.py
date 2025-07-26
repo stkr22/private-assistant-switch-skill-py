@@ -10,7 +10,7 @@ from __future__ import annotations
 
 class SwitchSkillError(Exception):
     """Base exception for all switch skill errors.
-    
+
     All custom exceptions in the switch skill should inherit from this base class
     to provide a consistent error handling interface.
     """
@@ -26,7 +26,7 @@ class DeviceCacheError(SwitchSkillError):
 
 class DeviceValidationError(SwitchSkillError):
     """Errors during device model validation."""
-    
+
     def __init__(self, message: str, device_data: dict | None = None) -> None:
         super().__init__(message)
         self.device_data = device_data
@@ -34,7 +34,7 @@ class DeviceValidationError(SwitchSkillError):
 
 class TemplateError(SwitchSkillError):
     """Template loading and rendering errors."""
-    
+
     def __init__(self, message: str, template_name: str | None = None) -> None:
         super().__init__(message)
         self.template_name = template_name
@@ -42,7 +42,7 @@ class TemplateError(SwitchSkillError):
 
 class MQTTError(SwitchSkillError):
     """MQTT communication errors."""
-    
+
     def __init__(self, message: str, topic: str | None = None) -> None:
         super().__init__(message)
         self.topic = topic
@@ -50,7 +50,7 @@ class MQTTError(SwitchSkillError):
 
 class DeviceNotFoundError(SwitchSkillError):
     """Error when requested device cannot be found."""
-    
+
     def __init__(self, message: str, device_name: str | None = None, room: str | None = None) -> None:
         super().__init__(message)
         self.device_name = device_name
@@ -59,7 +59,7 @@ class DeviceNotFoundError(SwitchSkillError):
 
 class ActionParsingError(SwitchSkillError):
     """Error during action detection and parsing."""
-    
+
     def __init__(self, message: str, text: str | None = None) -> None:
         super().__init__(message)
         self.text = text

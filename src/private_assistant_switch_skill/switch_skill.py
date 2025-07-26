@@ -1,8 +1,10 @@
 import asyncio
 import logging
+import re
 import string
 from dataclasses import dataclass
 from enum import Enum
+from re import Pattern
 
 import aiomqtt
 import jinja2
@@ -20,6 +22,23 @@ from private_assistant_switch_skill.exceptions import (
     TemplateError,
 )
 from private_assistant_switch_skill.models import SwitchSkillDevice  # Import the Device model from models.py
+
+
+@dataclass
+class ActionPattern:
+    """Defines a pattern for matching user input to actions.
+
+    Supports both keyword-based matching and regex patterns for complex cases.
+
+    Attributes:
+        keywords: List of required keywords (all must be present)
+        regex_pattern: Optional regex pattern for complex matching
+        priority: Higher priority patterns are checked first
+    """
+
+    keywords: list[str]
+    regex_pattern: Pattern[str] | None = None
+    priority: int = 0
 
 
 @dataclass
@@ -75,8 +94,8 @@ class Parameters(BaseModel):
 class Action(Enum):
     """Enum representing different switch actions that can be performed.
 
-    Each action is defined by a list of keywords that must all be present
-    in the user's command for the action to be detected.
+    Each action is defined by an ActionPattern that specifies matching criteria.
+    This enables flexible, data-driven action detection without hard-coded special cases.
 
     Attributes:
         HELP: Show usage instructions
@@ -88,20 +107,35 @@ class Action(Enum):
         REFRESH: Refresh device cache from database
     """
 
-    HELP = ["help"]  # noqa: RUF012
-    ON = ["on"]  # noqa: RUF012
-    OFF = ["off"]  # noqa: RUF012
-    LIST = ["list"]  # noqa: RUF012
-    ROOM_ON = ["room", "on"]  # noqa: RUF012
-    ROOM_OFF = ["room", "off"]  # noqa: RUF012
-    REFRESH = ["refresh"]  # noqa: RUF012
+    # AIDEV-NOTE: Data-driven action patterns replace hard-coded special cases
+    HELP = ActionPattern(keywords=["help"], priority=10)
+    LIST = ActionPattern(keywords=["list"], priority=10)
+    REFRESH = ActionPattern(keywords=["refresh"], priority=10)
+    # High priority patterns for "all lights" scenarios
+    ROOM_ON = ActionPattern(keywords=["on"], regex_pattern=re.compile(r"all\s+lights?"), priority=20)
+    ROOM_OFF = ActionPattern(keywords=["off"], regex_pattern=re.compile(r"all\s+lights?"), priority=20)
+    # Lower priority basic on/off patterns
+    ON = ActionPattern(keywords=["on"], priority=5)
+    OFF = ActionPattern(keywords=["off"], priority=5)
+
+    def get_action_name(self) -> str:
+        """Get human-readable action name for templates.
+        
+        Returns:
+            str: Human-readable action name (e.g., "on", "off")
+        """
+        if self == Action.ROOM_ON:
+            return "on"
+        if self == Action.ROOM_OFF:
+            return "off"
+        return str(self.value.keywords[0])
 
     @classmethod
     def find_matching_action(cls, text: str) -> "Action | None":
-        """Parse user text to identify the intended action.
+        """Parse user text to identify the intended action using pattern matching.
 
-        Uses keyword matching to determine which action the user wants to perform.
-        Special handling for "all lights" phrases which map to room-wide actions.
+        Uses configurable ActionPatterns to determine which action the user wants to perform.
+        Patterns are checked by priority (highest first) to handle overlapping cases correctly.
 
         Args:
             text: Raw user input text to parse
@@ -109,21 +143,27 @@ class Action(Enum):
         Returns:
             Action: The detected action, or None if no match found
         """
-        text = text.translate(str.maketrans("", "", string.punctuation))
-        text_words = set(text.lower().split())
+        # Normalize text for consistent matching
+        normalized_text = text.translate(str.maketrans("", "", string.punctuation)).lower()
+        text_words = set(normalized_text.split())
 
-        # AIDEV-NOTE: Special case for "all lights" - maps to room-wide control
-        text_lower = text.lower()
-        if "all lights" in text_lower:
-            if "on" in text_words:
-                return cls.ROOM_ON
-            if "off" in text_words:
-                return cls.ROOM_OFF
+        # Sort actions by priority (highest first) for correct precedence
+        actions_by_priority = sorted(cls, key=lambda a: a.value.priority, reverse=True)
 
-        # Check other actions by keyword matching
-        for action in cls:
-            if all(word in text_words for word in action.value):
+        for action in actions_by_priority:
+            pattern = action.value
+
+            # Check if all required keywords are present
+            keywords_match = all(keyword in text_words for keyword in pattern.keywords)
+
+            # Check regex pattern if specified
+            regex_match = True
+            if pattern.regex_pattern:
+                regex_match = bool(pattern.regex_pattern.search(normalized_text))
+
+            if keywords_match and regex_match:
                 return action
+
         return None
 
 
@@ -310,8 +350,9 @@ class SwitchSkill(commons.BaseSkill):
             devices.extend([DeviceLocation(device=device, found_room=room) for device in room_devices])
         return devices
 
-    async def skill_preparations(self):
-        return await super().skill_preparations()
+    async def skill_preparations(self) -> None:
+        # AIDEV-NOTE: Override base method for skill-specific preparation logic
+        pass
 
     async def calculate_certainty(self, intent_analysis_result: commons.IntentAnalysisResult) -> float:
         """Calculate how confident this skill is about handling the user's request.

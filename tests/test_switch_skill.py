@@ -42,7 +42,7 @@ class TestSwitchSkill(unittest.IsolatedAsyncioTestCase):
             task_group=self.mock_task_group,
             logger=self.mock_logger,
         )
-        
+
         # Mock add_task to return actual asyncio.Task objects for proper concurrent testing
         self.skill.add_task = lambda coro, name=None, **_: asyncio.create_task(coro, name=name)
         async with self.engine_async.begin() as conn:
