@@ -6,7 +6,7 @@ The Switch Skill is part of the Modular Private Assistant ecosystem - a distribu
 
 ### System Flow
 ```
-Voice Input ’ Speech-to-Text ’ Intent Analysis ’ MQTT Broadcast ’ Skills ’ zigbee2mqtt ’ Devices
+Voice Input  Speech-to-Text  Intent Analysis  MQTT Broadcast  Skills  zigbee2mqtt  Devices
 ```
 
 ### Core Components
