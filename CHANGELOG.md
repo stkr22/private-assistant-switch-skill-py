@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.5.0...v1.5.1) (2025-09-14)
+
+
+### Bug Fixes
+
+* :bug: shorten module docstring to comply with line length limit [AI] ([70da023](https://github.com/stkr22/private-assistant-switch-skill-py/commit/70da02370a3dccc4fce3e42fd3d91037352dd7a3))
+
 ## [1.5.0](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.4.1...v1.5.0) (2025-07-26)
 
 
