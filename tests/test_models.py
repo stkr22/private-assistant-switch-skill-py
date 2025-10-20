@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from pydantic import ValidationError
 
@@ -25,7 +27,7 @@ invalid_topics = [
 @pytest.mark.parametrize("topic", valid_topics)
 def test_valid_topics(topic):
     try:
-        device = SwitchSkillDevice(topic=topic, alias="Valid Device", room="Room")
+        device = SwitchSkillDevice(id=uuid.uuid4(), topic=topic, alias="Valid Device", room="Room")
         assert device.topic == topic.strip()  # Ensure the topic is properly accepted and trimmed
     except ValidationError:
         pytest.fail(f"Valid topic '{topic}' was unexpectedly rejected.")
@@ -35,4 +37,4 @@ def test_valid_topics(topic):
 @pytest.mark.parametrize("topic", invalid_topics)
 def test_invalid_topics(topic):
     with pytest.raises(ValidationError):
-        SwitchSkillDevice(topic=topic, alias="Invalid Device", room="Room")
+        SwitchSkillDevice(id=uuid.uuid4(), topic=topic, alias="Invalid Device", room="Room")

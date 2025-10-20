@@ -1,18 +1,23 @@
 import asyncio
 import logging
 import unittest
+import uuid
+from datetime import datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import jinja2
-from private_assistant_commons import messages
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlmodel import SQLModel
+from private_assistant_commons import (
+    ClassifiedIntent,
+    ClientRequest,
+    Entity,
+    EntityType,
+    IntentRequest,
+    IntentType,
+)
+from private_assistant_commons.database.models import GlobalDevice, Room
+from sqlalchemy.ext.asyncio import create_async_engine
 
-from private_assistant_switch_skill import models
 from private_assistant_switch_skill.switch_skill import (
-    Action,
-    DeviceLocation,
-    Parameters,
     SwitchSkill,
     SwitchSkillDependencies,
 )
@@ -23,10 +28,44 @@ class TestSwitchSkill(unittest.IsolatedAsyncioTestCase):
     def setUpClass(cls):
         cls.engine_async = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
 
+    def create_mock_global_device(  # noqa: PLR0913
+        self,
+        device_id: uuid.UUID,
+        name: str,
+        room_name: str,
+        topic: str,
+        payload_on: str = "ON",
+        payload_off: str = "OFF",
+    ) -> Mock:
+        """Create a mock GlobalDevice with a mocked Room relationship."""
+        # Create mock Room
+        mock_room = Mock(spec=Room)
+        mock_room.id = uuid.uuid4()
+        mock_room.name = room_name
+
+        # Create mock GlobalDevice (avoid SQLAlchemy configuration issues)
+        mock_global_device = Mock(spec=GlobalDevice)
+        mock_global_device.id = device_id
+        mock_global_device.device_type_id = uuid.uuid4()
+        mock_global_device.name = name
+        mock_global_device.pattern = [name.lower()]
+        mock_global_device.device_attributes = {
+            "topic": topic,
+            "payload_on": payload_on,
+            "payload_off": payload_off,
+        }
+        mock_global_device.room_id = mock_room.id
+        mock_global_device.skill_id = uuid.uuid4()
+
+        # Mock the room relationship (eagerly loaded by BaseSkill)
+        mock_global_device.room = mock_room
+
+        return mock_global_device
+
     async def asyncSetUp(self):
-        self.mock_session = AsyncMock(spec=AsyncSession)
         self.mock_mqtt_client = AsyncMock()
         self.mock_config = Mock()
+        self.mock_config.client_id = "test_switch_skill"
         self.mock_template_env = Mock(spec=jinja2.Environment)
         self.mock_task_group = AsyncMock()
         self.mock_logger = Mock(logging.Logger)
@@ -45,52 +84,36 @@ class TestSwitchSkill(unittest.IsolatedAsyncioTestCase):
 
         # Mock add_task to return actual asyncio.Task objects for proper concurrent testing
         self.skill.add_task = lambda coro, name=None, **_: asyncio.create_task(coro, name=name)
-        async with self.engine_async.begin() as conn:
-            await conn.run_sync(SQLModel.metadata.create_all)
+
+        # Mock device registry methods (BaseSkill methods)
+        self.skill.register_device = AsyncMock()
+        self.skill.ensure_device_types_registered = AsyncMock()
+        self.skill.ensure_skill_registered = AsyncMock()
+        self.skill.publish_device_update = AsyncMock()
+
+        # Initialize global_devices as empty list (tests will populate)
+        self.skill.global_devices = []
 
     async def asyncTearDown(self):
-        async with self.engine_async.begin() as conn:
-            await conn.run_sync(SQLModel.metadata.drop_all)
-        await self.mock_session.close()
-
-    async def test_get_devices(self):
-        mock_device = models.SwitchSkillDevice(
-            topic="livingroom/light/main",
-            alias="main light",
-            room="living room",
-            payload_on="ON",
-            payload_off="OFF",
-        )
-        async with AsyncSession(self.engine_async) as session, session.begin():
-            session.add(mock_device)
-
-        devices = await self.skill.get_devices(["living room"])
-
-        self.assertEqual(len(devices), 1)
-        self.assertEqual(devices[0].alias, "main light")
-        self.assertEqual(devices[0].topic, "livingroom/light/main")
+        pass  # No database cleanup needed
 
     async def test_find_device_in_all_rooms(self):
-        # Add devices in different rooms
-        devices = [
-            models.SwitchSkillDevice(
-                topic="livingroom/light/main",
-                alias="main light",
-                room="living room",
-                payload_on="ON",
-                payload_off="OFF",
-            ),
-            models.SwitchSkillDevice(
-                topic="bedroom/light/main",
-                alias="bedroom light",
-                room="bedroom",
-                payload_on="ON",
-                payload_off="OFF",
-            ),
-        ]
-        async with AsyncSession(self.engine_async) as session, session.begin():
-            for device in devices:
-                session.add(device)
+        # Create mock GlobalDevices in different rooms
+        living_room_device = self.create_mock_global_device(
+            device_id=uuid.uuid4(),
+            name="main light",
+            room_name="living room",
+            topic="livingroom/light/main",
+        )
+        bedroom_device = self.create_mock_global_device(
+            device_id=uuid.uuid4(),
+            name="bedroom light",
+            room_name="bedroom",
+            topic="bedroom/light/main",
+        )
+
+        # Set global_devices on skill
+        self.skill.global_devices = [living_room_device, bedroom_device]
 
         # Test finding device in current room
         device_location = await self.skill.find_device_in_all_rooms("main light", "living room")
@@ -108,136 +131,94 @@ class TestSwitchSkill(unittest.IsolatedAsyncioTestCase):
         device_location = await self.skill.find_device_in_all_rooms("nonexistent", "living room")
         self.assertIsNone(device_location)
 
-    async def test_find_parameters(self):
-        mock_device = models.SwitchSkillDevice(
-            topic="livingroom/light/main", alias="main light", room="living room", payload_on="ON", payload_off="OFF"
-        )
-        async with AsyncSession(self.engine_async) as session, session.begin():
-            session.add(mock_device)
-
-        mock_intent_result = Mock(spec=messages.IntentAnalysisResult)
-        mock_client_request = Mock(spec=messages.ClientRequest)
-        mock_client_request.room = "living room"
-        mock_intent_result.rooms = ["living room"]
-        mock_intent_result.client_request = mock_client_request
-        mock_intent_result.nouns = ["main light"]
-
-        parameters = await self.skill.find_parameters(Action.ON, mock_intent_result)
-
-        self.assertEqual(len(parameters.targets), 1)
-        self.assertEqual(parameters.targets[0].device.alias, "main light")
-        self.assertEqual(parameters.targets[0].found_room, "living room")
-
-    async def test_send_mqtt_command(self):
-        mock_device = models.SwitchSkillDevice(
-            id=1,
+    async def test_extract_devices_from_entities(self):
+        # Create mock GlobalDevice
+        mock_global_device = self.create_mock_global_device(
+            device_id=uuid.uuid4(),
+            name="main light",
+            room_name="living room",
             topic="livingroom/light/main",
-            alias="main light",
-            room="living room",
-            payload_on="ON",
-            payload_off="OFF",
         )
 
-        device_location = DeviceLocation(device=mock_device, found_room="living room")
-        parameters = Parameters(targets=[device_location], current_room="living room")
+        # Set global_devices on skill
+        self.skill.global_devices = [mock_global_device]
 
-        await self.skill.send_mqtt_command(Action.ON, parameters)
-
-        self.mock_mqtt_client.publish.assert_called_once_with("livingroom/light/main", "ON", qos=1)
-        self.mock_logger.info.assert_called_with(
-            "Sending payload %s to topic %s via MQTT for device in %s.", "ON", "livingroom/light/main", "living room"
+        # Create mock classified intent with device entities
+        device_entity = Entity(
+            id=uuid.uuid4(),
+            type=EntityType.DEVICE,
+            raw_text="main light",
+            normalized_value="main light",
+            confidence=0.9,
+            metadata={},
+            linked_to=[],
+        )
+        classified_intent = ClassifiedIntent(
+            id=uuid.uuid4(),
+            intent_type=IntentType.DEVICE_ON,
+            confidence=0.9,
+            entities={"devices": [device_entity]},
+            alternative_intents=[],
+            raw_text="turn on the main light",
+            timestamp=datetime.now(),
         )
 
-    async def test_process_request_with_valid_action(self):
-        mock_device = models.SwitchSkillDevice(
-            id=1,
+        targets = await self.skill._extract_devices_from_entities(classified_intent, "living room")
+
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(targets[0].device.alias, "main light")
+        self.assertEqual(targets[0].found_room, "living room")
+
+    async def test_process_request_with_device_on(self):
+        # Create mock GlobalDevice
+        mock_global_device = self.create_mock_global_device(
+            device_id=uuid.uuid4(),
+            name="main light",
+            room_name="living room",
             topic="livingroom/light/main",
-            alias="light",
-            room="living room",
-            payload_on="ON",
-            payload_off="OFF",
         )
 
-        device_location = DeviceLocation(device=mock_device, found_room="living room")
-        mock_parameters = Parameters(targets=[device_location], current_room="living room")
+        # Set global_devices on skill
+        self.skill.global_devices = [mock_global_device]
 
-        mock_client_request = Mock()
-        mock_client_request.room = "living room"
-        mock_client_request.text = "switch on the light"
-
-        mock_intent_result = Mock(spec=messages.IntentAnalysisResult)
-        mock_intent_result.client_request = mock_client_request
-        mock_intent_result.verbs = ["switch", "on"]
-        mock_intent_result.nouns = [Mock(text="light")]
+        # Create IntentRequest with DEVICE_ON intent
+        device_entity = Entity(
+            id=uuid.uuid4(),
+            type=EntityType.DEVICE,
+            raw_text="main light",
+            normalized_value="main light",
+            confidence=0.9,
+            metadata={},
+            linked_to=[],
+        )
+        classified_intent = ClassifiedIntent(
+            id=uuid.uuid4(),
+            intent_type=IntentType.DEVICE_ON,
+            confidence=0.9,
+            entities={"devices": [device_entity]},
+            alternative_intents=[],
+            raw_text="turn on the main light",
+            timestamp=datetime.now(),
+        )
+        client_request = ClientRequest(
+            id=uuid.uuid4(),
+            text="turn on the main light",
+            room="living room",
+            output_topic="test/output/topic",
+        )
+        intent_request = IntentRequest(
+            id=uuid.uuid4(),
+            classified_intent=classified_intent,
+            client_request=client_request,
+        )
 
         with (
-            patch.object(self.skill, "get_answer", return_value="Turning on the livingroom light") as mock_get_answer,
-            patch.object(self.skill, "send_mqtt_command") as mock_send_mqtt_command,
-            patch.object(self.skill, "find_parameters", return_value=mock_parameters),
+            patch.object(self.skill, "_render_response", return_value="Turning on the main light") as mock_render,
             patch.object(self.skill, "add_task") as mock_add_task,
         ):
-            await self.skill.process_request(mock_intent_result)
+            await self.skill.process_request(intent_request)
 
-            mock_get_answer.assert_called_once_with(Action.ON, mock_parameters)
-            mock_send_mqtt_command.assert_called_once_with(Action.ON, mock_parameters)
-            # Verify add_task was called twice: once for send_response, once for send_mqtt_command
+            mock_render.assert_called_once()
+            # Verify add_task was called twice: once for send_response, once for _send_mqtt_commands
             check_value = 2
             assert mock_add_task.call_count == check_value
-
-    async def test_find_matching_action_room_control(self):
-        # Test room-wide light control
-        self.assertEqual(Action.find_matching_action("turn off all lights"), Action.ROOM_OFF)
-        self.assertEqual(Action.find_matching_action("switch on all lights in bedroom"), Action.ROOM_ON)
-        self.assertEqual(Action.find_matching_action("switch off all lights"), Action.ROOM_OFF)
-
-        # Test non-room-wide commands
-        self.assertEqual(Action.find_matching_action("switch off light"), Action.OFF)
-        self.assertEqual(Action.find_matching_action("all"), None)
-
-    async def test_get_all_room_devices(self):
-        # Add devices in different rooms
-        devices = [
-            models.SwitchSkillDevice(
-                topic="livingroom/light/main",
-                alias="main light",
-                room="living room",
-                payload_on="ON",
-                payload_off="OFF",
-            ),
-            models.SwitchSkillDevice(
-                topic="livingroom/light/secondary",
-                alias="secondary light",
-                room="living room",
-                payload_on="ON",
-                payload_off="OFF",
-            ),
-            models.SwitchSkillDevice(
-                topic="bedroom/light/main",
-                alias="bedroom light",
-                room="bedroom",
-                payload_on="ON",
-                payload_off="OFF",
-            ),
-        ]
-
-        async with AsyncSession(self.engine_async) as session, session.begin():
-            for device in devices:
-                session.add(device)
-
-        # Test getting devices from multiple rooms
-        rooms = ["living room", "bedroom"]
-        device_locations = await self.skill.get_all_room_devices(rooms)
-
-        self.assertEqual(len(device_locations), 3)
-        room_counts = {"living room": 0, "bedroom": 0}
-        for loc in device_locations:
-            room_counts[loc.found_room] += 1
-
-        self.assertEqual(room_counts["living room"], 2)
-        self.assertEqual(room_counts["bedroom"], 1)
-
-        # Test getting devices from single room
-        single_room = ["bedroom"]
-        device_locations = await self.skill.get_all_room_devices(single_room)
-        self.assertEqual(len(device_locations), 1)
-        self.assertEqual(device_locations[0].found_room, "bedroom")
