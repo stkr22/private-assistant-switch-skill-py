@@ -1,11 +1,23 @@
-{% if parameters.targets|length > 0 -%}
-{% if parameters.targets|length == 1 -%}
-The device {{ parameters.targets[0].device.alias }}{% if parameters.targets[0].found_room != parameters.current_room %} (found in {{ parameters.targets[0].found_room }}){% endif %} has been turned {{ action.get_action_name() }}.
-{% else -%}
+{%- if parameters.targets|length > 0 -%}
+{%- set state = "on" if intent_type.name == "DEVICE_ON" else "off" -%}
+{%- if parameters.is_room_wide -%}
+{%- if parameters.rooms|length > 1 -%}
+    {%- set room_list = (parameters.rooms[:-1]|join(', ')) + ' and ' + parameters.rooms[-1] -%}
+{%- else -%}
+    {%- set room_list = parameters.rooms[0] -%}
+{%- endif %}
+Turned {{ state }} all lights in {{ room_list }}.
+{% elif parameters.targets|length == 1 %}
+The device {{ parameters.targets[0].device.alias }}{% if parameters.targets[0].found_room != parameters.current_room %} (found in {{ parameters.targets[0].found_room }}){% endif %} has been turned {{ state }}.
+{% else %}
 The devices {% for target in parameters.targets -%}
     {{ target.device.alias }}{% if target.found_room != parameters.current_room %} (found in {{ target.found_room }}){% endif %}{% if not loop.last and loop.index != loop.length - 1 %}, {% elif loop.index == loop.length - 1 %} and {% endif %}
-{%- endfor %} have been turned {{ action.get_action_name() }}.
+{%- endfor %} have been turned {{ state }}.
 {% endif -%}
 {% else -%}
+{% if parameters.is_room_wide %}
+I couldn't find any lights in {% if parameters.rooms|length > 1 %}these rooms{% else %}this room{% endif %}.
+{% else %}
 No devices matching the request were found.
+{% endif -%}
 {% endif %}

@@ -1,11 +1,11 @@
 {% if parameters.targets -%}
-{%- set state = action.get_action_name() -%}
+{%- set state = "on" if intent_type.name == "DEVICE_ON" else "off" -%}
 {%- if parameters.rooms|length > 1 -%}
     {%- set room_list = (parameters.rooms[:-1]|join(', ')) + ' and ' + parameters.rooms[-1] -%}
 {%- else -%}
     {%- set room_list = parameters.rooms[0] -%}
-{%- endif -%}
+{%- endif %}
 Turned {{ state }} all lights in {{ room_list }}.
-{% else -%}
+{% else %}
 I couldn't find any lights in {% if parameters.rooms|length > 1 %}these rooms{% else %}this room{% endif %}.
 {% endif %}

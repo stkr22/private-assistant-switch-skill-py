@@ -1,45 +1,66 @@
 import re
+from uuid import UUID
 
-from pydantic import field_validator
-from sqlmodel import Field, SQLModel
-from sqlmodel._compat import SQLModelConfig
+from private_assistant_commons.database.models import GlobalDevice
+from pydantic import BaseModel, field_validator
 
 # AIDEV-NOTE: MQTT topic validation - strict validation prevents zigbee2mqtt communication issues
 MQTT_TOPIC_REGEX = re.compile(r"[\$#\+\s\0-\31]+")  # Disallow '+', '#', whitespace, and control characters
 MQTT_TOPIC_MAX_LENGTH = 128
 
 
-class SQLModelValidation(SQLModel):
-    """Helper class to enable Pydantic validation in SQLModel table classes.
-
-    Provides validation configuration for SQLModel classes with table=True,
-    enabling field validation and assignment validation.
-    """
-
-    model_config = SQLModelConfig(from_attributes=True, validate_assignment=True)
-
-
-class SwitchSkillDevice(SQLModelValidation, table=True):  # type: ignore
-    """Database model for smart home devices controlled by the switch skill.
+class SwitchSkillDevice(BaseModel):
+    """Pydantic model for smart home devices controlled by the switch skill.
 
     Represents a zigbee2mqtt device that can be controlled via MQTT commands.
-    Includes validation for MQTT topic format and length restrictions.
+    This is a transformation layer over GlobalDevice for type-safe, validated access
+    to skill-specific device attributes.
 
     Attributes:
-        id: Primary key, auto-generated
-        topic: MQTT topic for device control (validated)
-        alias: Human-readable device name for voice commands
-        room: Room location for context-aware device resolution
+        id: Unique device identifier (from GlobalDevice)
+        alias: Human-readable device name for voice commands (from GlobalDevice.name)
+        room: Room location for context-aware device resolution (from GlobalDevice.room.name)
+        topic: MQTT topic for device control (from device_attributes, validated)
         payload_on: MQTT payload to turn device on (default "ON")
         payload_off: MQTT payload to turn device off (default "OFF")
     """
 
-    id: int | None = Field(default=None, primary_key=True)
-    topic: str
+    id: UUID
     alias: str
     room: str
+    topic: str
     payload_on: str = "ON"
     payload_off: str = "OFF"
+
+    @classmethod
+    def from_global_device(cls, global_device: GlobalDevice) -> "SwitchSkillDevice":
+        """Transform GlobalDevice to SwitchSkillDevice.
+
+        Extracts MQTT-specific attributes from device_attributes and room name from
+        the eagerly-loaded room relationship.
+
+        Args:
+            global_device: GlobalDevice instance with eagerly loaded room relationship
+
+        Returns:
+            SwitchSkillDevice: Validated device model with MQTT attributes
+
+        Raises:
+            ValueError: If required attributes are missing or invalid
+        """
+        attrs = global_device.device_attributes or {}
+
+        # Extract room name from eagerly-loaded relationship
+        room_name = global_device.room.name if global_device.room else ""
+
+        return cls(
+            id=global_device.id,
+            alias=global_device.name,
+            room=room_name,
+            topic=attrs.get("topic", ""),
+            payload_on=attrs.get("payload_on", "ON"),
+            payload_off=attrs.get("payload_off", "OFF"),
+        )
 
     @field_validator("topic")
     @classmethod
@@ -82,4 +103,3 @@ class SwitchSkillDevice(SQLModelValidation, table=True):  # type: ignore
         if not value or not value.strip():
             raise ValueError("Field cannot be empty or only whitespace.")
         return value.strip()
-

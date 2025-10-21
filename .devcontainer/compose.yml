@@ -1,0 +1,71 @@
+version: "3.8"
+
+services:
+  # Development container service
+  dev:
+    image: ghcr.io/stkr22/devcontainer-python-container:1.2.2@sha256:4378cd81b5e7b77159aa294ef1322a61628fbb5b087567966016e385ea0ed788
+    container_name: switch-skill-dev
+    volumes:
+      - ..:/workspace:cached,U
+    command: sleep infinity
+    cap_add:
+      - NET_RAW
+    environment:
+      # PostgreSQL connection
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: assistant
+      POSTGRES_PASSWORD: assistant_dev_password
+      POSTGRES_DB: assistant
+      # MQTT connection
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    networks:
+      - pa-switch-skill-network
+
+  # PostgreSQL database for device registry
+  postgres:
+    image: docker.io/postgres:17.6-bookworm
+    container_name: switch-skill-postgres
+    environment:
+      POSTGRES_USER: assistant
+      POSTGRES_PASSWORD: assistant_dev_password
+      POSTGRES_DB: assistant
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U assistant -d assistant"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pa-switch-skill-network
+
+  # Eclipse Mosquitto MQTT broker
+  mosquitto:
+    image: docker.io/eclipse-mosquitto:2.0.22
+    container_name: switch-skill-mosquitto
+    volumes:
+      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - pa-switch-skill-network
+
+volumes:
+  postgres_data:
+    driver: local
+  mosquitto_data:
+    driver: local
+  mosquitto_logs:
+    driver: local
+
+networks:
+  pa-switch-skill-network:
+    driver: bridge
