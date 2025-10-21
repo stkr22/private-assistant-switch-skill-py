@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.0](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.5.0...v1.6.0) (2025-10-21)
+
+
+### Features
+
+* :sparkles: migrate to private-assistant-commons 4.4.0+ closes [#67](https://github.com/stkr22/private-assistant-switch-skill-py/issues/67) [AI] ([7606bbb](https://github.com/stkr22/private-assistant-switch-skill-py/commit/7606bbbff3bbf2fd5c699623b66a3b5ff87ce632))
+
+
+### Bug Fixes
+
+* :bug: shorten module docstring to comply with line length limit [AI] ([70da023](https://github.com/stkr22/private-assistant-switch-skill-py/commit/70da02370a3dccc4fce3e42fd3d91037352dd7a3))
+* exclude integration test as these are missing in github action ([db7bf4a](https://github.com/stkr22/private-assistant-switch-skill-py/commit/db7bf4a05f38e449036ae44b7ed3f3b3186513c8))
+
 ## [1.5.0](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.4.1...v1.5.0) (2025-07-26)
 
 
