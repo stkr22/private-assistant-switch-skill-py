@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.6.0...v1.6.1) (2025-10-23)
+
+
+### Bug Fixes
+
+* updating containerimage and capitalize AS ([da3d0eb](https://github.com/stkr22/private-assistant-switch-skill-py/commit/da3d0eb8851dec99251b586adf265923dd334bbe))
+
 ## [1.6.0](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.5.0...v1.6.0) (2025-10-21)
 
 
