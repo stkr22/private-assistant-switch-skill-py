@@ -118,6 +118,33 @@ async def test_device_type(db_session) -> DeviceType:
 
 
 @pytest.fixture
+async def test_device_types(db_session) -> dict[str, DeviceType]:
+    """Create multiple realistic device types in the database.
+
+    Creates device types inspired by real smart home setups:
+    - light: ceiling lights, lamps
+    - switch: wall switches, toggle switches
+    - plug: smart plugs, outlet controllers
+    """
+    device_type_names = ["light", "switch", "plug"]
+    device_types = {}
+
+    for type_name in device_type_names:
+        result = await db_session.exec(select(DeviceType).where(DeviceType.name == type_name))
+        device_type = result.first()
+
+        if device_type is None:
+            device_type = DeviceType(name=type_name)
+            db_session.add(device_type)
+            await db_session.flush()
+            await db_session.refresh(device_type)
+
+        device_types[type_name] = device_type
+
+    return device_types
+
+
+@pytest.fixture
 async def test_room(db_session) -> Room:
     """Create a test room in the database."""
     room_name = f"test_room_{uuid.uuid4().hex[:8]}"
@@ -129,9 +156,29 @@ async def test_room(db_session) -> Room:
 
 
 @pytest.fixture
-async def test_device(
-    db_session, test_skill_entity, test_device_type, test_room
-) -> AsyncGenerator[GlobalDevice, None]:
+async def test_rooms(db_session) -> dict[str, Room]:
+    """Create multiple realistic rooms in the database.
+
+    Creates rooms inspired by typical smart home setups with unique names
+    to avoid conflicts with actual configuration.
+    """
+    room_names = ["test_office", "test_lounge", "test_studio"]
+    rooms = {}
+
+    for room_name in room_names:
+        # Add unique suffix to ensure no conflicts with real rooms
+        unique_room_name = f"{room_name}_{uuid.uuid4().hex[:6]}"
+        room = Room(name=unique_room_name)
+        db_session.add(room)
+        await db_session.flush()
+        await db_session.refresh(room)
+        rooms[room_name] = room
+
+    return rooms
+
+
+@pytest.fixture
+async def test_device(db_session, test_skill_entity, test_device_type, test_room) -> AsyncGenerator[GlobalDevice, None]:
     """Create a single test device in the database.
 
     Note: This fixture must be created BEFORE the running_skill fixture
@@ -157,7 +204,7 @@ async def test_device(
     )
     db_session.add(device)
     await db_session.commit()
-    await db_session.refresh(device, ["room"])
+    await db_session.refresh(device, ["room", "device_type"])
 
     logger.debug("Device created with ID=%s, skill_id=%s", device.id, device.skill_id)
 
@@ -220,7 +267,115 @@ async def test_devices_multiple(
     await db_session.commit()
 
     for device in devices:
-        await db_session.refresh(device, ["room"])
+        await db_session.refresh(device, ["room", "device_type"])
+
+    yield devices
+
+    # Cleanup: Delete all test devices
+    for device in devices:
+        await db_session.delete(device)
+    await db_session.commit()
+
+
+@pytest.fixture
+async def test_devices_realistic(
+    db_session, test_skill_entity, test_device_types, test_rooms
+) -> AsyncGenerator[list[GlobalDevice], None]:
+    """Create realistic mixed devices across multiple rooms.
+
+    Inspired by real smart home setups with:
+    - Multiple device types (switches, plugs, lights)
+    - Realistic naming (desk, ceiling, shelf patterns)
+    - Zigbee2mqtt-style topics and JSON payloads
+    - Multiple rooms with different device configurations
+
+    Note: This fixture must be created BEFORE the running_skill fixture.
+    """
+    await db_session.refresh(test_skill_entity)
+
+    # Ensure device types and rooms are refreshed
+    for device_type in test_device_types.values():
+        await db_session.refresh(device_type)
+    for room in test_rooms.values():
+        await db_session.refresh(room)
+
+    skill_id = test_skill_entity.id
+    office_room = test_rooms["test_office"]
+    lounge_room = test_rooms["test_lounge"]
+
+    # Create devices inspired by real setup patterns
+    devices = [
+        # Office: mix of switches and plugs
+        GlobalDevice(
+            device_type_id=test_device_types["switch"].id,
+            name="desk",
+            pattern=["desk", f"{office_room.name} desk"],
+            device_attributes={
+                "topic": f"test/mqtt/{office_room.name}/plug/desk_lamp/set",
+                "payload_on": '{"state": "ON"}',
+                "payload_off": '{"state": "OFF"}',
+            },
+            room_id=office_room.id,
+            skill_id=skill_id,
+        ),
+        GlobalDevice(
+            device_type_id=test_device_types["switch"].id,
+            name="ceiling",
+            pattern=["ceiling", f"{office_room.name} ceiling"],
+            device_attributes={
+                "topic": f"test/mqtt/{office_room.name}/plug/ceiling_light/set",
+                "payload_on": '{"state": "ON"}',
+                "payload_off": '{"state": "OFF"}',
+            },
+            room_id=office_room.id,
+            skill_id=skill_id,
+        ),
+        GlobalDevice(
+            device_type_id=test_device_types["plug"].id,
+            name="shelf",
+            pattern=["shelf", f"{office_room.name} shelf"],
+            device_attributes={
+                "topic": f"test/mqtt/{office_room.name}/plug/shelf_light/set",
+                "payload_on": '{"state": "ON"}',
+                "payload_off": '{"state": "OFF"}',
+            },
+            room_id=office_room.id,
+            skill_id=skill_id,
+        ),
+        # Lounge: mix of lights and plugs
+        GlobalDevice(
+            device_type_id=test_device_types["light"].id,
+            name="ceiling",
+            pattern=["ceiling", f"{lounge_room.name} ceiling"],
+            device_attributes={
+                "topic": f"test/mqtt/{lounge_room.name}/light/ceiling/set",
+                "payload_on": '{"state": "ON"}',
+                "payload_off": '{"state": "OFF"}',
+            },
+            room_id=lounge_room.id,
+            skill_id=skill_id,
+        ),
+        GlobalDevice(
+            device_type_id=test_device_types["plug"].id,
+            name="corner",
+            pattern=["corner", f"{lounge_room.name} corner"],
+            device_attributes={
+                "topic": f"test/mqtt/{lounge_room.name}/plug/corner_lamp/set",
+                "payload_on": '{"state": "ON"}',
+                "payload_off": '{"state": "OFF"}',
+            },
+            room_id=lounge_room.id,
+            skill_id=skill_id,
+        ),
+    ]
+
+    for device in devices:
+        db_session.add(device)
+
+    await db_session.commit()
+
+    for device in devices:
+        await db_session.refresh(device, ["room", "device_type"])
 
     yield devices
 
@@ -364,6 +519,42 @@ async def running_skill(skill_config_file):
         await skill_task
 
 
+@pytest.fixture
+async def running_skill_realistic(skill_config_file, test_devices_realistic):  # noqa: ARG001
+    """Start the skill in background with realistic mixed devices ready.
+
+    Args:
+        skill_config_file: Path to skill config
+        test_devices_realistic: Realistic devices that must be created before skill starts
+    """
+    # Devices are already created by test_devices_realistic fixture
+    # Give database time to fully persist the commit
+    await asyncio.sleep(0.5)
+
+    # Start skill as background task
+    skill_task = asyncio.create_task(start_skill(skill_config_file))
+
+    # Wait for skill to initialize and subscribe to all topics
+    # This includes the device update topic listener
+    await asyncio.sleep(3)
+
+    # Trigger device load by publishing device update notification
+    mqtt_host = os.getenv("MQTT_HOST", "mosquitto")
+    mqtt_port = int(os.getenv("MQTT_PORT", "1883"))
+    async with aiomqtt.Client(hostname=mqtt_host, port=mqtt_port) as trigger_client:
+        await trigger_client.publish("assistant/global_device_update", "", qos=1)
+
+    # Wait for skill to process the device update and load devices
+    await asyncio.sleep(2)
+
+    yield
+
+    # Cleanup: Cancel skill task
+    skill_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await skill_task
+
+
 class TestSingleDeviceCommand:
     """Test single device commands (DEVICE_ON)."""
 
@@ -402,7 +593,7 @@ class TestSingleDeviceCommand:
             id=uuid.uuid4(),
             intent_type=IntentType.DEVICE_ON,
             confidence=0.9,
-            entities={"devices": [device_entity]},
+            entities={"device": [device_entity]},
             alternative_intents=[],
             raw_text="turn on test light",
             timestamp=datetime.now(),
@@ -499,7 +690,7 @@ class TestRoomWideCommand:
             id=uuid.uuid4(),
             intent_type=IntentType.DEVICE_OFF,
             confidence=0.9,
-            entities={"devices": device_entities},
+            entities={"device": device_entities},
             alternative_intents=[],
             raw_text="turn off all lights",
             timestamp=datetime.now(),
@@ -557,6 +748,127 @@ class TestRoomWideCommand:
         assert response_received, "Response was not published"
 
 
+class TestGenericDeviceType:
+    """Test generic device type queries across realistic mixed devices.
+
+    These tests validate the skill's ability to handle generic device type
+    requests (e.g., "turn on all plugs") in a room with mixed device types,
+    mimicking real-world smart home scenarios.
+    """
+
+    async def test_generic_plug_query(
+        self,
+        test_devices_realistic,
+        test_rooms,
+        running_skill_realistic,  # noqa: ARG002
+        mqtt_test_client,
+    ):
+        """Test that generic 'plug' query finds only plug devices in the room.
+
+        Flow:
+        1. Request to turn on all plugs in office room
+        2. Assert only plug devices receive commands (not switches)
+        3. Assert response indicates multiple devices controlled
+
+        This test mimics the original bug scenario where generic device
+        type queries were failing due to entity key mismatch.
+        """
+        office_room = test_rooms["test_office"]
+        output_topic = f"test/output/{uuid.uuid4().hex}"
+
+        # Get plug devices in office room
+        plug_devices = [
+            d for d in test_devices_realistic if d.device_type.name == "plug" and d.room_id == office_room.id
+        ]
+        plug_topics = [d.device_attributes["topic"] for d in plug_devices]
+
+        # Get non-plug devices in office room (should not be controlled)
+        non_plug_devices = [
+            d for d in test_devices_realistic if d.device_type.name != "plug" and d.room_id == office_room.id
+        ]
+        non_plug_topics = [d.device_attributes["topic"] for d in non_plug_devices]
+
+        logger.info("Testing generic plug query: %d plugs, %d non-plugs", len(plug_devices), len(non_plug_devices))
+
+        # Prepare IntentRequest with generic device type "plug"
+        device_entity = Entity(
+            id=uuid.uuid4(),
+            type=EntityType.DEVICE,
+            raw_text="plugs",
+            normalized_value="plug",
+            confidence=0.8,
+            metadata={"device_type": "plug", "is_generic": True, "quantifier": "all"},
+            linked_to=[],
+        )
+
+        classified_intent = ClassifiedIntent(
+            id=uuid.uuid4(),
+            intent_type=IntentType.DEVICE_ON,
+            confidence=1.0,
+            entities={"device": [device_entity]},
+            alternative_intents=[],
+            raw_text="turn on all plugs",
+            timestamp=datetime.now(),
+        )
+
+        client_request = ClientRequest(
+            id=uuid.uuid4(),
+            text="turn on all plugs",
+            room=office_room.name,
+            output_topic=output_topic,
+        )
+
+        intent_request = IntentRequest(
+            id=uuid.uuid4(),
+            classified_intent=classified_intent,
+            client_request=client_request,
+        )
+
+        # Subscribe to all device topics and response topic
+        await mqtt_test_client.subscribe("test/mqtt/#")
+        await mqtt_test_client.subscribe(output_topic)
+
+        # Publish IntentRequest
+        await mqtt_test_client.publish(
+            "assistant/intent_engine/result",
+            intent_request.model_dump_json(),
+            qos=1,
+        )
+
+        # Collect messages
+        plug_commands_received = set()
+        non_plug_commands_received = set()
+        response_received = False
+
+        async with asyncio.timeout(10):
+            async for message in mqtt_test_client.messages:
+                topic = str(message.topic)
+                payload = message.payload.decode()
+
+                if topic in plug_topics:
+                    assert '{"state": "ON"}' in payload, f"Expected ON payload, got '{payload}'"
+                    plug_commands_received.add(topic)
+
+                if topic in non_plug_topics:
+                    non_plug_commands_received.add(topic)
+
+                if topic == output_topic:
+                    response_received = True
+
+                # Exit when expected messages received
+                if len(plug_commands_received) == len(plug_topics) and response_received:
+                    break
+
+        # Assertions
+        assert len(plug_commands_received) == len(plug_topics), (
+            f"Expected commands to {len(plug_topics)} plug devices, got {len(plug_commands_received)}"
+        )
+        assert len(non_plug_commands_received) == 0, (
+            f"Non-plug devices should not receive commands, but {len(non_plug_commands_received)} did"
+        )
+        assert response_received, "Response was not published"
+
+
 class TestDeviceNotFound:
     """Test error handling when device is not found."""
 
@@ -585,7 +897,7 @@ class TestDeviceNotFound:
             id=uuid.uuid4(),
             intent_type=IntentType.DEVICE_ON,
             confidence=0.9,
-            entities={"devices": [device_entity]},
+            entities={"device": [device_entity]},
             alternative_intents=[],
             raw_text="turn on nonexistent device",
             timestamp=datetime.now(),
