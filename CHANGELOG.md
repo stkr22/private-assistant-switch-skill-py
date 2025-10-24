@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.6.1...v1.6.2) (2025-10-24)
+
+
+### Bug Fixes
+
+* 🐛 correct entity key from plural to singular in device extraction [AI] ([88827f2](https://github.com/stkr22/private-assistant-switch-skill-py/commit/88827f2ee6f9f0ce56634c8ad632b45d42864a0a))
+
 ## [1.6.1](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.6.0...v1.6.1) (2025-10-23)
 
 
