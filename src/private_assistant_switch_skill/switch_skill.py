@@ -203,8 +203,8 @@ class SwitchSkill(commons.BaseSkill):
             list[DeviceLocation]: List of device locations to control
         """
         targets = []
-        device_entities = classified_intent.entities.get("devices", [])
-        room_entities = classified_intent.entities.get("rooms", [])
+        device_entities = classified_intent.entities.get("device", [])
+        room_entities = classified_intent.entities.get("room", [])
 
         # Determine target rooms
         target_rooms = [room_entities[0].normalized_value] if room_entities else [current_room]
