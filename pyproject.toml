@@ -8,7 +8,7 @@ version = "1.6.2"
 description = "Home Automation Skill for Modular Private Assistant: Manages and controls smart plugs and bulbs via Home Assistant API."
 authors = [{ name = "stkr22", email = "stkr22@github.com" }]
 readme = "README.md"
-license = "GPL-3.0"
+license = "GPL-3.0-only"
 license-files = [
     "LICENSE",
 ]
