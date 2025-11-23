@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.3](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.6.2...v1.6.3) (2025-11-23)
+
+
+### Bug Fixes
+
+* update license to GPL-3.0-only in pyproject.toml ([91e2af6](https://github.com/stkr22/private-assistant-switch-skill-py/commit/91e2af65b9cfbf62c42868dcfbf17165e4d25f43))
+* update Python version to 3.13.9 in Containerfile ([b1489c8](https://github.com/stkr22/private-assistant-switch-skill-py/commit/b1489c89a07228df35989b1c5e6a34113be916b1))
+
 ## [1.6.2](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.6.1...v1.6.2) (2025-10-24)
 
 
