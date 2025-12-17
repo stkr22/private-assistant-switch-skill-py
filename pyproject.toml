@@ -1,5 +1,5 @@
 [build-system]
-requires = ["uv_build>=0.8.11,<0.9.0"]
+requires = ["uv_build>=0.9.17,<0.10.0"]
 build-backend = "uv_build"
 
 [project]
@@ -41,7 +41,7 @@ Changelog = "https://github.com/stkr22/private-assistant-switch-skill-py/blob/ma
 
 [dependency-groups]
 dev = [
-    "ruff~=0.12.3",
+    "ruff~=0.14.1",
     "mypy~=1.17.0",
     "pytest~=8.4.1",
     "types-pyyaml~=6.0.12.20240311",
@@ -49,7 +49,6 @@ dev = [
     "pytest-cov~=6.2.1",
     "pytest-xdist~=3.6.0",
     "coverage[toml]~=7.6.0",
-    "commitizen~=4.8.3",
     "pytest-asyncio~=0.25.2",
 ]
 
@@ -108,10 +107,3 @@ exclude_lines = [
     "def __repr__",
     "if __name__ == .__main__.:",
 ]
-
-[tool.commitizen]
-name = "cz_conventional_commits"
-tag_format = "v$version"
-version_scheme = "pep440"
-version_provider = "scm"
-update_changelog_on_bump = true
