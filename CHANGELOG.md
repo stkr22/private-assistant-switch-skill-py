@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.6.3...v1.7.0) (2026-01-02)
+
+
+### Features
+
+* :sparkles: modernize skill infrastructure and remove aiosqlite [AI] ([6e43f78](https://github.com/stkr22/private-assistant-switch-skill-py/commit/6e43f789a3ff4c4530199442efadbd27a2a893fe))
+
+
+### Bug Fixes
+
+* :wrench: modernize database and MQTT configuration [AI] ([dcdfddb](https://github.com/stkr22/private-assistant-switch-skill-py/commit/dcdfddb9df4471ab72ce732fff9a3af25d2bf366))
+
 ## [1.6.3](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.6.2...v1.6.3) (2025-11-23)
 
 
