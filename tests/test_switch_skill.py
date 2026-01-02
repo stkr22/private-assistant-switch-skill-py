@@ -15,7 +15,6 @@ from private_assistant_commons import (
     IntentType,
 )
 from private_assistant_commons.database.models import GlobalDevice, Room
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from private_assistant_switch_skill.switch_skill import (
     SwitchSkill,
@@ -26,7 +25,7 @@ from private_assistant_switch_skill.switch_skill import (
 class TestSwitchSkill(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls):
-        cls.engine_async = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+        cls.engine_async = AsyncMock()
 
     def create_mock_global_device(  # noqa: PLR0913
         self,
