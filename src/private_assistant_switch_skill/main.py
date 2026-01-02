@@ -4,10 +4,14 @@ from typing import Annotated
 
 import jinja2
 import typer
-from private_assistant_commons import mqtt_connection_handler, skill_config, skill_logger
-from private_assistant_commons.database import PostgresConfig
+from private_assistant_commons import (
+    MqttConfig,
+    create_skill_engine,
+    mqtt_connection_handler,
+    skill_config,
+    skill_logger,
+)
 from rich.console import Console
-from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
 
 from private_assistant_switch_skill import switch_skill
@@ -40,7 +44,7 @@ async def start_skill(
     logger = skill_logger.SkillLogger.get_logger("Private Assistant SwitchSkill")
     config_obj = skill_config.load_config(config_path, skill_config.SkillConfig)
     # AIDEV-NOTE: Database schema creation on startup - creates global_devices tables from commons
-    db_engine_async = create_async_engine(PostgresConfig().connection_string_async)
+    db_engine_async = create_skill_engine()
     async with db_engine_async.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
     template_env = jinja2.Environment(
@@ -53,7 +57,11 @@ async def start_skill(
     dependencies = SwitchSkillDependencies(db_engine=db_engine_async, template_env=template_env)
 
     await mqtt_connection_handler.mqtt_connection_handler(
-        switch_skill.SwitchSkill, config_obj, 5, logger=logger, dependencies=dependencies
+        switch_skill.SwitchSkill,
+        config_obj,
+        MqttConfig(),
+        logger=logger,
+        dependencies=dependencies,
     )
 
 
