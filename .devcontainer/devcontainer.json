@@ -2,7 +2,7 @@
 	"name": "private-assistant-switch-skill-dev-environment",
 	"dockerComposeFile": "compose.yml",
 	"service": "dev",
-	"workspaceFolder": "/workspace",
+	"workspaceFolder": "/workspace/private-assistant-switch-skill-py",
 	"remoteUser": "vscode",
 	"customizations": {
 		"vscode": {
