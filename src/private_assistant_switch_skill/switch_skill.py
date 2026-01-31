@@ -1,3 +1,9 @@
+"""Core skill implementation for smart device control via MQTT.
+
+Provides intent handling, device resolution, and MQTT command execution for
+controlling switches, plugs, and bulbs through zigbee2mqtt integration.
+"""
+
 import asyncio
 import logging
 from dataclasses import dataclass
@@ -26,6 +32,7 @@ class SwitchSkillDependencies:
     Attributes:
         db_engine: Async SQLAlchemy engine for database operations
         template_env: Jinja2 environment for response template rendering
+
     """
 
     db_engine: AsyncEngine
@@ -41,6 +48,7 @@ class DeviceLocation(BaseModel):
     Attributes:
         device: The SwitchSkillDevice that was found
         found_room: The room where the device was located
+
     """
 
     device: SwitchSkillDevice
@@ -58,6 +66,7 @@ class Parameters(BaseModel):
         current_room: Room where the user made the request
         rooms: List of rooms to search for devices
         is_room_wide: Whether command affects all devices in room(s)
+
     """
 
     targets: list[DeviceLocation] = []
@@ -77,7 +86,16 @@ class SwitchSkill(commons.BaseSkill):
         db_engine: Database engine for device queries
         template_env: Jinja2 environment for response generation
         intent_to_template: Mapping of intent types to response templates
+
     """
+
+    help_text = (
+        "The light control skill can assist with the following tasks:\n"
+        '- Turning specific lights or plugs on or off. Example: "Switch on the living room light" '
+        'or "Turn off the kitchen plug."\n'
+        '- Listing all available lights or plugs. Example: "List all lights" or "Show available plugs."\n\n'
+        'To control a device, say "switch" followed by "on" or "off" and the device name.'
+    )
 
     def __init__(
         self,
@@ -95,6 +113,7 @@ class SwitchSkill(commons.BaseSkill):
             dependencies: Injected dependencies (database, templates)
             task_group: Async task group for concurrent operations
             logger: Logger instance for debugging and monitoring
+
         """
         super().__init__(
             config_obj=config_obj,
@@ -111,7 +130,6 @@ class SwitchSkill(commons.BaseSkill):
         self.supported_intents = {
             IntentType.DEVICE_ON: 0.8,
             IntentType.DEVICE_OFF: 0.8,
-            IntentType.SYSTEM_HELP: 0.7,
         }
 
         # AIDEV-NOTE: Device types this skill can control
@@ -125,9 +143,9 @@ class SwitchSkill(commons.BaseSkill):
 
         Raises:
             RuntimeError: If critical templates cannot be loaded
+
         """
         template_mappings = {
-            IntentType.SYSTEM_HELP: "help.j2",
             IntentType.DEVICE_ON: "state.j2",
             IntentType.DEVICE_OFF: "state.j2",
         }
@@ -160,6 +178,7 @@ class SwitchSkill(commons.BaseSkill):
 
         Returns:
             DeviceLocation: Device and its location if found, None otherwise
+
         """
         # AIDEV-NOTE: Room priority logic - current room first for context-aware resolution
         self.logger.debug("Searching for device '%s' in current room: %s", device_name, current_room)
@@ -201,6 +220,7 @@ class SwitchSkill(commons.BaseSkill):
 
         Returns:
             list[DeviceLocation]: List of device locations to control
+
         """
         targets = []
         device_entities = classified_intent.entities.get("device", [])
@@ -245,6 +265,7 @@ class SwitchSkill(commons.BaseSkill):
 
         Returns:
             str: Rendered response text
+
         """
         template = self.intent_to_template.get(intent_type)
         if template:
@@ -270,6 +291,7 @@ class SwitchSkill(commons.BaseSkill):
 
         Raises:
             Exception: If MQTT publishing fails for any device
+
         """
         if not parameters.targets:
             return
@@ -322,6 +344,7 @@ class SwitchSkill(commons.BaseSkill):
 
         Args:
             intent_request: The intent request with classified intent and client request
+
         """
         classified_intent = intent_request.classified_intent
         client_request = intent_request.client_request
@@ -352,6 +375,7 @@ class SwitchSkill(commons.BaseSkill):
 
         Args:
             intent_request: The intent request with classified intent and client request
+
         """
         classified_intent = intent_request.classified_intent
         client_request = intent_request.client_request
@@ -377,29 +401,8 @@ class SwitchSkill(commons.BaseSkill):
         self.add_task(self.send_response(answer, client_request=client_request))
         self.add_task(self._send_mqtt_commands(IntentType.DEVICE_OFF, parameters))
 
-    async def _handle_system_help(self, intent_request: IntentRequest) -> None:
-        """Handle SYSTEM_HELP intent - show help information.
-
-        Args:
-            intent_request: The intent request with classified intent and client request
-        """
-        client_request = intent_request.client_request
-        current_room = client_request.room
-
-        # Build empty parameters for help template
-        parameters = Parameters(
-            targets=[],
-            current_room=current_room,
-            rooms=[current_room],
-            is_room_wide=False,
-        )
-
-        # Send response
-        answer = self._render_response(IntentType.SYSTEM_HELP, parameters)
-        self.add_task(self.send_response(answer, client_request=client_request))
-
     async def process_request(self, intent_request: IntentRequest) -> None:
-        """Main request processing method - routes intent to appropriate handler.
+        """Process incoming request and route intent to appropriate handler.
 
         Orchestrates the full command processing pipeline:
         1. Extract intent type from classified intent
@@ -408,6 +411,7 @@ class SwitchSkill(commons.BaseSkill):
 
         Args:
             intent_request: The intent request with classified intent and client request
+
         """
         classified_intent = intent_request.classified_intent
         intent_type = classified_intent.intent_type
@@ -423,8 +427,6 @@ class SwitchSkill(commons.BaseSkill):
             await self._handle_device_on(intent_request)
         elif intent_type == IntentType.DEVICE_OFF:
             await self._handle_device_off(intent_request)
-        elif intent_type == IntentType.SYSTEM_HELP:
-            await self._handle_system_help(intent_request)
         else:
             self.logger.warning("Unsupported intent type: %s", intent_type)
             await self.send_response(
