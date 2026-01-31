@@ -1,7 +1,7 @@
 # Private Assistant Switch Skill
 
 [![Copier](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/copier-org/copier/master/img/badge/badge-grayscale-inverted-border-orange.json)](https://github.com/copier-org/copier)
-[![python](https://img.shields.io/badge/Python-3.12-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+[![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=fff)](#)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v0.json)](https://github.com/charliermarsh/ruff)
 [![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
@@ -14,7 +14,7 @@ A voice-controlled home automation skill for the Modular Private Assistant that 
 
 This skill enables voice control of your smart home devices by:
 - Turning individual devices on/off by name
-- Controlling all lights in a room simultaneously  
+- Controlling all lights in a room simultaneously
 - Listing available devices
 - Providing room-aware device resolution (finds devices in current room first)
 
@@ -22,7 +22,7 @@ This skill enables voice control of your smart home devices by:
 
 ### Individual Device Control
 - "Switch on the bedroom light"
-- "Turn off the kitchen plug" 
+- "Turn off the kitchen plug"
 - "Switch off desk light"
 
 ### Room-wide Control

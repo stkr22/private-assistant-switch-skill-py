@@ -1,3 +1,10 @@
+"""Entry point and CLI for the Private Assistant Switch Skill.
+
+Provides command-line interface for starting the switch skill service that controls
+smart home devices via MQTT. Handles initialization of database, templates, and MQTT
+connection for processing voice commands.
+"""
+
 import asyncio
 import pathlib
 from typing import Annotated
@@ -27,6 +34,12 @@ app = typer.Typer(
 
 @app.command()
 def main(config_path: Annotated[pathlib.Path, typer.Argument(envvar="PRIVATE_ASSISTANT_CONFIG_PATH")]) -> None:
+    """Start the switch skill service with the specified configuration.
+
+    Args:
+        config_path: Path to YAML configuration file
+
+    """
     asyncio.run(start_skill(config_path))
 
 
@@ -40,6 +53,7 @@ async def start_skill(
 
     Args:
         config_path: Path to YAML configuration file
+
     """
     logger = skill_logger.SkillLogger.get_logger("Private Assistant SwitchSkill")
     config_obj = skill_config.load_config(config_path, skill_config.SkillConfig)

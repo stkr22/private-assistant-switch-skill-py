@@ -14,7 +14,7 @@ from private_assistant_commons import (
     IntentRequest,
     IntentType,
 )
-from private_assistant_commons.database.models import GlobalDevice, Room
+from private_assistant_commons.database.device_models import GlobalDevice, Room
 
 from private_assistant_switch_skill.switch_skill import (
     SwitchSkill,

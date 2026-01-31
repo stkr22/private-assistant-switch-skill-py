@@ -40,7 +40,7 @@ from private_assistant_commons import (
     IntentType,
     create_skill_engine,
 )
-from private_assistant_commons.database.models import DeviceType, GlobalDevice, Room, Skill
+from private_assistant_commons.database.device_models import DeviceType, GlobalDevice, Room, Skill
 from sqlmodel import SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -416,6 +416,7 @@ async def running_skill_single_device(skill_config_file, test_device, db_engine)
         skill_config_file: Path to skill config
         test_device: Test device that must be created before skill starts
         db_engine: Database engine to verify device visibility
+
     """
     # Device is already created by test_device fixture
     # Give database time to fully persist the commit
@@ -473,6 +474,7 @@ async def running_skill_multiple_devices(skill_config_file, test_devices_multipl
     Args:
         skill_config_file: Path to skill config
         test_devices_multiple: Test devices that must be created before skill starts
+
     """
     # Devices are already created by test_devices_multiple fixture
     # Give database time to fully persist the commit
@@ -529,6 +531,7 @@ async def running_skill_realistic(skill_config_file, test_devices_realistic):  #
     Args:
         skill_config_file: Path to skill config
         test_devices_realistic: Realistic devices that must be created before skill starts
+
     """
     # Devices are already created by test_devices_realistic fixture
     # Give database time to fully persist the commit

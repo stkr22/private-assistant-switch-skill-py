@@ -1,7 +1,13 @@
+"""Pydantic models for switch skill device representation and validation.
+
+Defines validated models for smart home devices with MQTT-specific attributes,
+including topic validation and payload configuration for zigbee2mqtt integration.
+"""
+
 import re
 from uuid import UUID
 
-from private_assistant_commons.database.models import GlobalDevice
+from private_assistant_commons.database.device_models import GlobalDevice
 from pydantic import BaseModel, field_validator
 
 # AIDEV-NOTE: MQTT topic validation - strict validation prevents zigbee2mqtt communication issues
@@ -23,6 +29,7 @@ class SwitchSkillDevice(BaseModel):
         topic: MQTT topic for device control (from device_attributes, validated)
         payload_on: MQTT payload to turn device on (default "ON")
         payload_off: MQTT payload to turn device off (default "OFF")
+
     """
 
     id: UUID
@@ -47,6 +54,7 @@ class SwitchSkillDevice(BaseModel):
 
         Raises:
             ValueError: If required attributes are missing or invalid
+
         """
         attrs = global_device.device_attributes or {}
 
@@ -78,6 +86,7 @@ class SwitchSkillDevice(BaseModel):
 
         Raises:
             ValueError: If topic contains invalid characters or exceeds length limit
+
         """
         if MQTT_TOPIC_REGEX.findall(value):
             raise ValueError("must not contain '+', '#', whitespace, or control characters.")
@@ -99,6 +108,7 @@ class SwitchSkillDevice(BaseModel):
 
         Raises:
             ValueError: If string is empty or only whitespace
+
         """
         if not value or not value.strip():
             raise ValueError("Field cannot be empty or only whitespace.")
