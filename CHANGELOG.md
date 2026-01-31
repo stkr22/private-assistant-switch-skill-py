@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.7.0...v1.8.0) (2026-01-31)
+
+
+### Features
+
+* restructure help intent ([e7a38ec](https://github.com/stkr22/private-assistant-switch-skill-py/commit/e7a38ec125d250b19618d3f7ba016329679bcda5))
+* restructure help intent ([57ce345](https://github.com/stkr22/private-assistant-switch-skill-py/commit/57ce345fce1f23729c99e1f01d90c3bda26a970d))
+
 ## [1.7.0](https://github.com/stkr22/private-assistant-switch-skill-py/compare/v1.6.3...v1.7.0) (2026-01-02)
 
 
