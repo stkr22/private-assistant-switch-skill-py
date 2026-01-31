@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "private-assistant-switch-skill"
-version = "1.7.0"
+version = "1.8.0"
 description = "Home Automation Skill for Modular Private Assistant: Manages and controls smart plugs and bulbs via Home Assistant API."
 authors = [{ name = "stkr22", email = "stkr22@github.com" }]
 readme = "README.md"
